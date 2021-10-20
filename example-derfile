@@ -1,0 +1,17 @@
+$hosts = host1, host2, host3
+
+[template_name1]
+final_name = template_name1.yml
+hostnames = host1
+apply_path = /home/test/.config/test/1
+
+[template_name2]
+final_name = template_name2.yml
+hostnames = host1, host2
+apply_path = /home/test/.config/test/2
+$hosts = host1, host2, host3
+
+[template_name3]
+final_name = template_name3.yml
+hostnames = host1, host2, host3
+apply_path = /home/test/.config/test/333
