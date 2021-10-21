@@ -1,17 +1,22 @@
+# comments are lines with hashtags
 $hosts = host1, host2, host3
+# variables are just in place text substitutions
+$path = /home/test/.config/test/
+# hello will be stored in $hello
+$hello = `echo hello`
 
-[template_name1]
+[template_name1.toml.t]
 final_name = template_name1.yml
 hostnames = host1
-apply_path = /home/test/.config/test/1
+apply_path = $path
 
-[template_name2]
+[template_name2.yml.t]
 final_name = template_name2.yml
 hostnames = host1, host2
-apply_path = /home/test/.config/test/2
-$hosts = host1, host2, host3
+apply_path = $path
+$test = test
 
-[template_name3]
+[template_name3.txt.t]
 final_name = template_name3.yml
-hostnames = host1, host2, host3
-apply_path = /home/test/.config/test/333
+hostnames = $hosts
+apply_path = $path

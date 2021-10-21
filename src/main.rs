@@ -50,7 +50,16 @@ impl Template {
 #[derive(Debug, Clone, Default)]
 struct Variable {
     _name: String,
-    _value: String,
+    _value: Vec<String>,
+}
+
+impl Variable {
+    fn new(_name: String, _value: Vec<String>) -> Self {
+        Self {
+            _name,
+            _value
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -68,8 +77,8 @@ impl Derfile {
         self.templates.get_mut(name)
     }
 
-    fn _add_var(&mut self, name: String) {
-        self._vars.insert(name, Default::default());
+    fn add_var(&mut self, name: String, value: Vec<String>) {
+        self._vars.insert(name.clone(), Variable::new(name, value));
     }
 
     fn _get_var(&mut self, name: &String) -> Option<&mut Variable> {
@@ -97,7 +106,7 @@ fn parse_args(args: Vec<String>) -> Args {
 }
 
 // TODO:
-//  [x] tables
+//  [x] templates
 //  [ ] variables
 //      [ ] variable from code execution?
 fn load_derfile(path: &path::Path) -> io::Result<Derfile> {
@@ -110,13 +119,41 @@ fn load_derfile(path: &path::Path) -> io::Result<Derfile> {
         .clone()
         .enumerate()
         .filter(|line| line.1.trim().starts_with("[") && line.1.trim().ends_with("]"))
-        .collect::<Vec<(usize, &str)>>()
-        .iter()
         .map(|each| return each.0)
         .collect();
 
-    println!("{}", template_indecies.len());
-    println!("{:?}", template_indecies);
+    let var_lines: Vec<String> = lines
+        .clone()
+        .enumerate()
+        .filter(|line| line.1.trim().starts_with("$"))
+        .map(|each| return each.1.to_string())
+        .collect();
+
+    for line in var_lines.iter() {
+        if line.contains("=") {
+            let split = line.split_at(line.find("=").unwrap());
+            let name = split.0.trim().strip_prefix("$").unwrap().to_string();
+            let value: Vec<String>;
+            let right_side = split.1
+                .trim()
+                .to_string()
+                .strip_prefix("=")
+                .unwrap()
+                .trim()
+                .to_string();
+
+            if right_side.contains(",") {
+                let split: Vec<String> = right_side.split(",")
+                    .map(|x| x.trim().to_string())
+                    .collect();
+                value = split
+            } else {
+                value = vec![right_side]
+            }
+
+            derfile.add_var(name, value)
+        }
+    }
 
     let lines: Vec<String> = lines.clone().map(|x| x.to_string()).collect();
     for (ii, index) in template_indecies.iter().enumerate() {
@@ -134,8 +171,6 @@ fn load_derfile(path: &path::Path) -> io::Result<Derfile> {
                 .drain(index..&template_indecies[ii + 1])
                 .collect();
         }
-
-        println!("{:?}", template_lines);
 
         let template_name: String = template_lines[0][1..template_lines[0].len() - 1].to_string();
         for line in template_lines.iter() {
@@ -207,8 +242,12 @@ fn load_derfile(path: &path::Path) -> io::Result<Derfile> {
                             )
                         }
                     }
-                    _ => {
-                        eprintln!("WARN: {} is not a valid template filed!", split.0)
+                    some => {
+                        if some.starts_with("$"){
+                            continue;
+                        } else {
+                            eprintln!("WARN: {} is not a valid template filed!", split.0)
+                        }
                     }
                 }
             }
