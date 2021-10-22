@@ -5,6 +5,11 @@ use std::io;
 use std::path;
 use std::process;
 
+const TEMPLATE_LEFT: &str = "[";
+const TEMPLATE_RIGHT: &str = "]";
+const CODE_SEP: &str = "`";
+const VAR_PREF: &str = "$";
+
 type Args = Vec<Arg>;
 
 enum Arg {
@@ -90,8 +95,8 @@ impl Derfile {
             derfile.add_template(template_name.clone());
             let mut temp = derfile.get_template(&template_name).unwrap();
             temp.name = template_name.to_string();
-            if template.final_name.starts_with("$") {
-                let variable_name = template.final_name.strip_prefix("$").unwrap().to_string();
+            if template.final_name.starts_with(VAR_PREF) {
+                let variable_name = template.final_name.strip_prefix(VAR_PREF).unwrap().to_string();
 
                 if let Some(variable) = self_clone.get_var(&variable_name) {
                     let mut temp = derfile.get_template(&template.name).unwrap();
@@ -101,8 +106,8 @@ impl Derfile {
                 let mut temp = derfile.get_template(&template_name).unwrap();
                 temp.final_name = template.final_name.clone();
             }
-            if template.apply_path.starts_with("$") {
-                let variable_name = template.apply_path.strip_prefix("$").unwrap().to_string();
+            if template.apply_path.starts_with(VAR_PREF) {
+                let variable_name = template.apply_path.strip_prefix(VAR_PREF).unwrap().to_string();
 
                 if let Some(variable) = self_clone.get_var(&variable_name) {
                     let mut template = derfile.get_template(&template.name).unwrap();
@@ -114,9 +119,9 @@ impl Derfile {
             }
             let mut hostname_clone: Vec<String> = Vec::new();
             for hostname_entry in template.hostnames.iter() {
-                if hostname_entry.starts_with("$") {
+                if hostname_entry.starts_with(VAR_PREF) {
                     if let Some(variable) =
-                        self_clone.get_var(&hostname_entry.strip_prefix("$").unwrap().to_string())
+                        self_clone.get_var(&hostname_entry.strip_prefix(VAR_PREF).unwrap().to_string())
                     {
                         let mut variable_value = variable.value.clone();
                         hostname_clone.append(&mut variable_value);
@@ -166,9 +171,10 @@ fn execute_code(command: String) -> Option<String> {
             .output();
         if let Ok(out) = process {
             let str = std::str::from_utf8(&out.stdout);
-            let str = str.expect("Unable to convert command output to string");
-            output = Some(str.to_string())
+            let str = str.expect("ERROR: Unable to convert command output to string");
+            output = Some(str.to_string().trim().to_string())
         } else {
+            eprintln!("ERROR: code block exited with exited with an error.");
             output = Some("".to_string())
         }
     } else {
@@ -176,9 +182,10 @@ fn execute_code(command: String) -> Option<String> {
             .output();
         if let Ok(out) = process {
             let str = std::str::from_utf8(&out.stdout);
-            let str = str.expect("Unable to convert command output to string");
-            output = Some(str.to_string())
+            let str = str.expect("ERROR: Unable to convert command output to string.");
+            output = Some(str.to_string().trim().to_string())
         } else {
+            eprintln!("ERROR: code block exited with exited with an error.");
             output = Some("".to_string())
         }
 
@@ -190,7 +197,7 @@ fn execute_code(command: String) -> Option<String> {
 // TODO:
 //  [x] templates
 //  [x] variables ->
-//      [ ] variable from code execution?
+//      [x] variable from code execution?
 fn load_derfile(path: &path::Path) -> io::Result<Derfile> {
     let buffer = fs::read_to_string(path)?;
     let mut derfile: Derfile = Default::default();
@@ -200,24 +207,24 @@ fn load_derfile(path: &path::Path) -> io::Result<Derfile> {
     let template_indecies: Vec<usize> = lines
         .clone()
         .enumerate()
-        .filter(|line| line.1.trim().starts_with("[") && line.1.trim().ends_with("]"))
+        .filter(|line| line.1.trim().starts_with(TEMPLATE_LEFT) && line.1.trim().ends_with(TEMPLATE_RIGHT))
         .map(|each| return each.0)
         .collect();
 
     let var_lines: Vec<String> = lines
         .clone()
         .enumerate()
-        .filter(|line| line.1.trim().starts_with("$"))
+        .filter(|line| line.1.trim().starts_with(VAR_PREF))
         .map(|each| return each.1.to_string())
         .collect();
 
     // TODO
-    // [ ] variables from shell code
+    // [x] variables from shell code
     for line in var_lines.iter() {
         if line.contains("=") {
             let split = line.split_at(line.find("=").unwrap());
-            let name = split.0.trim().strip_prefix("$").unwrap().to_string();
-            let value: Vec<String>;
+            let name = split.0.trim().strip_prefix(VAR_PREF).unwrap().to_string();
+            let mut value: Vec<String> = Vec::new();
             let right_side = split
                 .1
                 .trim()
@@ -226,8 +233,14 @@ fn load_derfile(path: &path::Path) -> io::Result<Derfile> {
                 .unwrap()
                 .trim()
                 .to_string();
+            if right_side.starts_with(CODE_SEP) {
+                if let Some(index) = right_side.find(CODE_SEP) {
+                    let content = right_side[index + 1..right_side.len() - 1].to_string();
+                    value = vec![execute_code(content.clone()).expect("Error: unablet to parse code block.")];
+                }
+            }
 
-            if right_side.contains(",") {
+            else if right_side.contains(",") {
                 let split: Vec<String> = right_side
                     .split(",")
                     .map(|x| x.trim().to_string())
@@ -260,7 +273,7 @@ fn load_derfile(path: &path::Path) -> io::Result<Derfile> {
 
         let template_name: String = template_lines[0][1..template_lines[0].len() - 1].to_string();
         for line in template_lines.iter() {
-            if line.starts_with("[") && line.ends_with("]") {
+            if line.starts_with(TEMPLATE_LEFT) && line.ends_with(TEMPLATE_RIGHT) {
                 derfile.add_template(template_name.clone());
                 if let Some(template) = derfile.get_template(&template_name) {
                     template.set_name(template_name.clone())
@@ -329,7 +342,7 @@ fn load_derfile(path: &path::Path) -> io::Result<Derfile> {
                         }
                     }
                     some => {
-                        if some.starts_with("$") {
+                        if some.starts_with(VAR_PREF) {
                             continue;
                         } else {
                             eprintln!("WARN: {} is not a valid template filed!", split.0)
@@ -349,9 +362,6 @@ fn run(args: Args) -> io::Result<()> {
             Arg::Derfile(file) => {
                 let df = load_derfile(path::Path::new(&file)).unwrap();
                 println!("{:#?}", df);
-                // TODO: not sure if it should work like this
-                // or if the vars substitution should be done while parsing
-                // let df = Derfile::apply(df);
             }
             // TODO: this might be useless
             Arg::Apply(_path) => {
