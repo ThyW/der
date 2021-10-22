@@ -14,7 +14,6 @@ apply_path = $path
 final_name = template_name2.yml
 hostnames = host1, host2
 apply_path = $path
-$test = test
 
 [template_name3.txt.t]
 final_name = template_name3.yml
