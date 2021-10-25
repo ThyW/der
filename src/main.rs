@@ -9,6 +9,7 @@ const TEMPLATE_LEFT: &str = "[";
 const TEMPLATE_RIGHT: &str = "]";
 const CODE_SEP: &str = "`";
 const VAR_PREF: &str = "$";
+const CODE_KEYWORDS: [&str; 1] = ["env"];
 
 type Args = Vec<Arg>;
 
@@ -161,6 +162,7 @@ fn parse_args(args: Vec<String>) -> Args {
 
 fn execute_code(command: String) -> Option<String> {
     let output: Option<String>;
+    let vars: HashMap<String, String> = env::vars().collect();
     if command.contains(" ") {
         let split: Vec<&str> = command.split(" ").collect();
         let cmd = split[0];
@@ -168,7 +170,9 @@ fn execute_code(command: String) -> Option<String> {
 
         let process = process::Command::new(cmd)
             .args(args)
+            .envs(&vars)
             .output();
+            
         if let Ok(out) = process {
             let str = std::str::from_utf8(&out.stdout);
             let str = str.expect("ERROR: Unable to convert command output to string");
@@ -179,6 +183,7 @@ fn execute_code(command: String) -> Option<String> {
         }
     } else {
         let process = process::Command::new(command)
+            .envs(&vars)
             .output();
         if let Ok(out) = process {
             let str = std::str::from_utf8(&out.stdout);
@@ -198,6 +203,7 @@ fn execute_code(command: String) -> Option<String> {
 //  [x] templates
 //  [x] variables ->
 //      [x] variable from code execution?
+//      [ ] find out what's wrong with it, it for example can't access environmental variables
 fn load_derfile(path: &path::Path) -> io::Result<Derfile> {
     let buffer = fs::read_to_string(path)?;
     let mut derfile: Derfile = Default::default();
@@ -220,6 +226,16 @@ fn load_derfile(path: &path::Path) -> io::Result<Derfile> {
 
     // TODO
     // [x] variables from shell code
+    // [ ] stuff such as "echo $PATH" does not work
+    // E.i. instead of returning the value
+    // of environmental variable $PATH(which could look like:
+    // /home/user/.local/bin/:/usr/bin/:/usr/local/bin/ etc.) we just get the actual string
+    // "$PATH".
+    // I have found no solution for this, you might look into this and submit a PR and make me feel
+    // like a dumb ass(which would be highly appreciated). But if this worked, I would be delighted.
+    // What we do instead, is have a special keyword for returning environmental variables. So
+    // something like this: "env`$PATH`" could return the actual value of our environmental
+    // variable.
     for line in var_lines.iter() {
         if line.contains("=") {
             let split = line.split_at(line.find("=").unwrap());
@@ -233,13 +249,14 @@ fn load_derfile(path: &path::Path) -> io::Result<Derfile> {
                 .unwrap()
                 .trim()
                 .to_string();
+
             if right_side.starts_with(CODE_SEP) {
                 if let Some(index) = right_side.find(CODE_SEP) {
                     let content = right_side[index + 1..right_side.len() - 1].to_string();
                     value = vec![execute_code(content.clone()).expect("Error: unablet to parse code block.")];
                 }
             }
-
+                
             else if right_side.contains(",") {
                 let split: Vec<String> = right_side
                     .split(",")
@@ -247,11 +264,35 @@ fn load_derfile(path: &path::Path) -> io::Result<Derfile> {
                     .collect();
                 value = split
             } else {
-                value = vec![right_side]
+                value = vec![right_side.clone()]
+            }
+           
+            // Special keywords are defined in const CODE_KEYWORDS and each of them is manually
+            // implemented here. So far, there's only "env", which is used to retrieve environmental
+            // variables
+            for each in CODE_KEYWORDS {
+                if right_side.starts_with(each) {
+                    match each {
+                        "env" => {
+                            if let Some(index) = right_side.find(CODE_SEP) {
+                                let env_variable = &right_side[index + 1..right_side.len() - 1];
+                                println!("{}", env_variable);
+
+                                if let Ok(env_output) = env::var(env_variable) {
+                                    value = vec![env_output]
+                                }
+                            }
+                            
+                        },
+                        _ => {}
+                    }
+
+                }
             }
 
             derfile.add_var(name, value)
         }
+
     }
 
     let lines: Vec<String> = lines.clone().map(|x| x.to_string()).collect();
