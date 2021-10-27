@@ -10,22 +10,15 @@ const TEMPLATE_RIGHT: &str = "]";
 const CODE_SEP: &str = "`";
 const VAR_PREF: &str = "$";
 const CODE_KEYWORDS: [&str; 1] = ["env"];
+const TEMP_START: &str = "@@";
+const TEMP_END: &str = "@";
 
 type Args = Vec<Arg>;
 
 enum Arg {
     Help,
     Derfile(String),
-    Apply(String),
-}
-
-fn help_function() {
-    println!("der v0.1");
-    println!("author: J. Kapko <kamo.bavmesa@gmail.com>");
-    println!("about: der is a tool for qucik multisystem application of dotfiles, with template supporting.\n");
-    println!("-a --apply PATH       apply dotfiles to a path.");
-    println!("-f --file PATH        use a specified derfile.");
-    println!("-h --help PATH        show this help message.")
+    Apply
 }
 
 #[derive(Debug, Clone, Default)]
@@ -34,6 +27,78 @@ struct Template {
     final_name: String,
     hostnames: Vec<String>,
     apply_path: String,
+}
+
+#[derive(Debug, Clone, Default)]
+struct Variable {
+    _name: String,
+    value: Vec<String>,
+}
+
+#[derive(Debug, Clone, Default)]
+struct Derfile {
+    templates: HashMap<String, Template>,
+    vars: HashMap<String, Variable>,
+}
+
+#[derive(Debug, Clone)]
+struct TemplateFile<'a> {
+    path: &'a String,
+    apply_path: &'a String,
+    hostnames: &'a Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+struct ParsedTemplate(String);
+
+impl<'a> TemplateFile<'a> {
+    fn new(path: &'a String, apply_path: &'a String, hostnames: &'a Vec<String>) -> Self {
+        Self {
+            path,
+            apply_path,
+            hostnames,
+        }
+    }
+
+    fn parse(&self) -> Option<ParsedTemplate> {
+        let _ret: String;
+        let hostname = env::var("HOSTNAME");
+        if !path::Path::new(&self.path).exists() {
+            return None
+        }
+
+        let file = fs::read_to_string(&self.path).expect(&format!("Error: Failed to read tempalte {}", &self.path).to_string());
+
+        // find all template code blocks
+        let mut sub_lines: Vec<(usize, String)> = Vec::new();
+        for (ii, line) in file.lines().enumerate() {
+            if line.starts_with("@@") || line.starts_with("@") {
+                sub_lines.push((ii, line.to_string()))
+            }
+        }
+
+        // check if all blocks are closed 
+        let open_code_bocks_count = sub_lines.iter().filter(|x| x.1.starts_with(TEMP_START)).count();
+        let closed_code_bocks_count = sub_lines.iter().filter(|x| x.1.starts_with(TEMP_END)).count();
+        if open_code_bocks_count != closed_code_bocks_count {
+            // TODO: This should probably be returning some internal error.
+            return None
+        }
+
+        // TODO: Finish this.
+
+        // TODO
+        Some(ParsedTemplate(String::with_capacity(0)))
+    }
+}
+
+fn help_function() {
+    println!("der v0.1");
+    println!("author: J. Kapko <kamo.bavmesa@gmail.com>");
+    println!("about: der is a tool for qucik multisystem application of dotfiles, with template supporting.\n");
+    println!("-a --apply            apply dotfiles to a path.");
+    println!("-f --file PATH        use a specified derfile.");
+    println!("-h --help PATH        show this help message.")
 }
 
 impl Template {
@@ -54,22 +119,10 @@ impl Template {
     }
 }
 
-#[derive(Debug, Clone, Default)]
-struct Variable {
-    _name: String,
-    value: Vec<String>,
-}
-
 impl Variable {
     fn new(_name: String, value: Vec<String>) -> Self {
         Self { _name, value }
     }
-}
-
-#[derive(Debug, Clone, Default)]
-struct Derfile {
-    templates: HashMap<String, Template>,
-    vars: HashMap<String, Variable>,
 }
 
 impl Derfile {
@@ -152,7 +205,7 @@ fn parse_args(args: Vec<String>) -> Args {
             "-f" | "--file" => {
                 ret.push(Arg::Derfile(args[i + 1].clone()));
             }
-            "-a" | "--apply" => ret.push(Arg::Apply(args[i + 1].clone())),
+            "-a" | "--apply" => ret.push(Arg::Apply),
             _ => (),
         }
     }
@@ -398,22 +451,29 @@ fn load_derfile(path: &path::Path) -> io::Result<Derfile> {
 }
 
 fn run(args: Args) -> io::Result<()> {
+    let mut derfile: Option<Derfile> = None;
     for arg in args {
         match arg {
             Arg::Derfile(file) => {
-                let df = load_derfile(path::Path::new(&file)).unwrap();
-                println!("{:#?}", df);
-            }
-            // TODO: this might be useless
-            Arg::Apply(_path) => {
-                let derfile = path::Path::new("./derfile");
+                let derfile = Some(load_derfile(path::Path::new(&file)).unwrap());
+                println!("{:#?}", derfile.as_ref().unwrap());
+            },
+            Arg::Apply => {
+                // TODO:
+                // we want to take a derfile and parse it
+                // then parse all templates and output them to their respective apply paths
+                // these apply paths should be attempted to be created if they do not exist
+                let derfile_default_path = path::Path::new("./derfile");
 
-                if !derfile.exists() {
+                if !derfile_default_path.exists() {
                     return Ok(());
                 }
 
-                // let loaded = load_derfile(derfile)?;
-            }
+                if !derfile.is_some() {
+                    derfile = Some(load_derfile(derfile_default_path)?);
+                }
+
+            },
             Arg::Help => {
                 help_function();
             }
