@@ -18,7 +18,8 @@ type Args = Vec<Arg>;
 enum Arg {
     Help,
     Derfile(String),
-    Apply
+    Parse(Vec<String>),
+    Apply,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -42,53 +43,160 @@ struct Derfile {
 }
 
 #[derive(Debug, Clone)]
-struct TemplateFile<'a> {
-    path: &'a String,
-    apply_path: &'a String,
-    hostnames: &'a Vec<String>,
+struct TemplateFile {
+    path: String,
+    final_name: String,
+    apply_path: String,
+    hostnames: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
 struct ParsedTemplate(String);
 
-impl<'a> TemplateFile<'a> {
-    fn new(path: &'a String, apply_path: &'a String, hostnames: &'a Vec<String>) -> Self {
+impl TemplateFile {
+    fn new(
+        path: String,
+        final_name: String,
+        apply_path: String,
+        hostnames: Vec<String>,
+    ) -> Self {
         Self {
             path,
+            final_name,
             apply_path,
             hostnames,
         }
     }
 
     fn parse(&self) -> Option<ParsedTemplate> {
-        let _ret: String;
+        // [x] make sure the file even exists
+        // [x] make sure there is an equal number of opening and closing template code symbols
+        let mut ret = String::new();
         let hostname = env::var("HOSTNAME");
+        let mut lines_to_add: Vec<(Vec<String>, usize, usize)> = Vec::new();
+        if hostname.is_err() {
+            eprintln!("Error when parsing template file: Unable to get the value of $HOSTNAME environment variable!");
+            return None;
+        }
+        if !self.hostnames.contains(hostname.as_ref().unwrap()) {
+            eprintln!(
+                "Warning: $HOSTNAME not in hostnames for template file: {}",
+                self.path
+            )
+        }
         if !path::Path::new(&self.path).exists() {
-            return None
+            return None;
         }
 
-        let file = fs::read_to_string(&self.path).expect(&format!("Error: Failed to read tempalte {}", &self.path).to_string());
+        let file_lines = fs::read_to_string(&self.path)
+            .expect(&format!("Error: Failed to read tempalte {}", &self.path).to_string());
 
         // find all template code blocks
-        let mut sub_lines: Vec<(usize, String)> = Vec::new();
-        for (ii, line) in file.lines().enumerate() {
-            if line.starts_with("@@") || line.starts_with("@") {
-                sub_lines.push((ii, line.to_string()))
+        let mut code_block_lines: Vec<(usize, String)> = Vec::new();
+        for (ii, line) in file_lines.lines().enumerate() {
+            if line.starts_with(TEMP_START) || line.starts_with(TEMP_END) {
+                code_block_lines.push((ii, line.to_string()))
             }
         }
 
-        // check if all blocks are closed 
-        let open_code_bocks_count = sub_lines.iter().filter(|x| x.1.starts_with(TEMP_START)).count();
-        let closed_code_bocks_count = sub_lines.iter().filter(|x| x.1.starts_with(TEMP_END)).count();
-        if open_code_bocks_count != closed_code_bocks_count {
-            // TODO: This should probably be returning some internal error.
-            return None
+        // check if all blocks are closed
+        let open_code_blocks_count = code_block_lines
+            .iter()
+            .filter(|x| x.1.starts_with(TEMP_START))
+            .count();
+        let closed_code_blocks_count = code_block_lines
+            .iter()
+            .filter(|x| x.1.starts_with(TEMP_END))
+            .count();
+        if open_code_blocks_count != closed_code_blocks_count {
+            eprintln!("Error when parsing template file: Open template blocks don't match closed template blocks!");
+            return None;
         }
 
-        // TODO: Finish this.
+        if open_code_blocks_count == 0 {
+            eprintln!("No code blocks were found in file {}", self.path);
+            return Some(ParsedTemplate(file_lines));
+        }
 
-        // TODO
-        Some(ParsedTemplate(String::with_capacity(0)))
+        // get all the lines and their indecies for substitution in the result file
+        for (ii, each) in code_block_lines.iter().enumerate() {
+            let code_block_start_index = each.0;
+            let code_block_end_index = code_block_lines[ii + 1].0;
+
+            let current_code_block = file_lines
+                .lines()
+                .map(ToString::to_string)
+                .collect::<Vec<String>>()[code_block_start_index..code_block_end_index]
+                .to_vec();
+            let code_block_first_line = &current_code_block[0];
+            let code_block_first_line_wo_prefix =
+                code_block_first_line.strip_suffix("@@")?.to_string();
+            // split line by `,` to get a list of hostnames on which we want to apply
+            let possible_hostnames = code_block_first_line_wo_prefix
+                .split(",")
+                .into_iter()
+                .map(ToString::to_string)
+                .collect::<Vec<String>>()
+                .to_vec();
+
+            for each in possible_hostnames {
+                if &each == hostname.as_ref().unwrap() {
+                    lines_to_add.push((
+                        current_code_block[1..current_code_block.len() - 2].to_vec(),
+                        code_block_start_index,
+                        code_block_end_index,
+                    ))
+                }
+            }
+        }
+
+        let mut line_nr_before_code_block = 0;
+        let file_lines_vec = file_lines
+            .lines()
+            .map(ToString::to_string)
+            .collect::<Vec<String>>();
+        for parsed_block in lines_to_add {
+            let (lines, begin, end) = parsed_block;
+            ret.push_str(&file_lines_vec[line_nr_before_code_block..begin].join("\n"));
+            ret.push_str(&lines.join("\n"));
+            line_nr_before_code_block = end
+        }
+
+        Some(ParsedTemplate(ret))
+    }
+
+    fn apply(&mut self) -> io::Result<()> {
+        let parsed = self.parse();
+        if parsed.is_none() {
+            return Ok(());
+        }
+
+        if self.apply_path.ends_with("/") {
+            self.apply_path.push_str(&self.final_name);
+        } else {
+            self.apply_path.push('/');
+            self.apply_path.push_str(&self.final_name) 
+        }
+        let output_path = path::Path::new(&self.apply_path);
+        if output_path.exists() {
+            fs::write(output_path, parsed.unwrap().0)?;
+        } else {
+            fs::create_dir_all(output_path.parent().expect("This shouldn't fail?"))?;
+            fs::write(output_path, parsed.unwrap().0)?
+        }
+
+        Ok(())
+    }
+}
+
+impl From<Template> for TemplateFile {
+    fn from(other: Template) -> Self {
+        Self {
+            path: other.name.clone(),
+            final_name: other.final_name.clone(),
+            apply_path: other.apply_path.clone(),
+            hostnames: other.hostnames.clone(),
+        }
     }
 }
 
@@ -96,7 +204,7 @@ fn help_function() {
     println!("der v0.1");
     println!("author: J. Kapko <kamo.bavmesa@gmail.com>");
     println!("about: der is a tool for qucik multisystem application of dotfiles, with template supporting.\n");
-    println!("-a --apply            apply dotfiles to a path.");
+    println!("-a --apply       apply dotfiles to a path.");
     println!("-f --file PATH        use a specified derfile.");
     println!("-h --help PATH        show this help message.")
 }
@@ -150,7 +258,11 @@ impl Derfile {
             let mut temp = derfile.get_template(&template_name).unwrap();
             temp.name = template_name.to_string();
             if template.final_name.starts_with(VAR_PREF) {
-                let variable_name = template.final_name.strip_prefix(VAR_PREF).unwrap().to_string();
+                let variable_name = template
+                    .final_name
+                    .strip_prefix(VAR_PREF)
+                    .unwrap()
+                    .to_string();
 
                 if let Some(variable) = self_clone.get_var(&variable_name) {
                     let mut temp = derfile.get_template(&template.name).unwrap();
@@ -161,7 +273,11 @@ impl Derfile {
                 temp.final_name = template.final_name.clone();
             }
             if template.apply_path.starts_with(VAR_PREF) {
-                let variable_name = template.apply_path.strip_prefix(VAR_PREF).unwrap().to_string();
+                let variable_name = template
+                    .apply_path
+                    .strip_prefix(VAR_PREF)
+                    .unwrap()
+                    .to_string();
 
                 if let Some(variable) = self_clone.get_var(&variable_name) {
                     let mut template = derfile.get_template(&template.name).unwrap();
@@ -174,8 +290,8 @@ impl Derfile {
             let mut hostname_clone: Vec<String> = Vec::new();
             for hostname_entry in template.hostnames.iter() {
                 if hostname_entry.starts_with(VAR_PREF) {
-                    if let Some(variable) =
-                        self_clone.get_var(&hostname_entry.strip_prefix(VAR_PREF).unwrap().to_string())
+                    if let Some(variable) = self_clone
+                        .get_var(&hostname_entry.strip_prefix(VAR_PREF).unwrap().to_string())
                     {
                         let mut variable_value = variable.value.clone();
                         hostname_clone.append(&mut variable_value);
@@ -199,12 +315,9 @@ fn parse_args(args: Vec<String>) -> Args {
 
     for (i, entry) in args.iter().enumerate() {
         match &entry[..] {
-            "-h" | "--help" => {
-                ret.push(Arg::Help);
-            }
-            "-f" | "--file" => {
-                ret.push(Arg::Derfile(args[i + 1].clone()));
-            }
+            "-h" | "--help" => ret.push(Arg::Help),
+            "-f" | "--file" => ret.push(Arg::Derfile(args[i + 1].clone())),
+            "-p" | "--parse" => ret.push(Arg::Parse(args[i..i + 3].to_vec())),
             "-a" | "--apply" => ret.push(Arg::Apply),
             _ => (),
         }
@@ -221,11 +334,8 @@ fn execute_code(command: String) -> Option<String> {
         let cmd = split[0];
         let args = &split[1..];
 
-        let process = process::Command::new(cmd)
-            .args(args)
-            .envs(&vars)
-            .output();
-            
+        let process = process::Command::new(cmd).args(args).envs(&vars).output();
+
         if let Ok(out) = process {
             let str = std::str::from_utf8(&out.stdout);
             let str = str.expect("ERROR: Unable to convert command output to string");
@@ -235,9 +345,7 @@ fn execute_code(command: String) -> Option<String> {
             output = Some("".to_string())
         }
     } else {
-        let process = process::Command::new(command)
-            .envs(&vars)
-            .output();
+        let process = process::Command::new(command).envs(&vars).output();
         if let Ok(out) = process {
             let str = std::str::from_utf8(&out.stdout);
             let str = str.expect("ERROR: Unable to convert command output to string.");
@@ -246,7 +354,6 @@ fn execute_code(command: String) -> Option<String> {
             eprintln!("ERROR: code block exited with exited with an error.");
             output = Some("".to_string())
         }
-
     }
 
     output
@@ -266,7 +373,9 @@ fn load_derfile(path: &path::Path) -> io::Result<Derfile> {
     let template_indecies: Vec<usize> = lines
         .clone()
         .enumerate()
-        .filter(|line| line.1.trim().starts_with(TEMPLATE_LEFT) && line.1.trim().ends_with(TEMPLATE_RIGHT))
+        .filter(|line| {
+            line.1.trim().starts_with(TEMPLATE_LEFT) && line.1.trim().ends_with(TEMPLATE_RIGHT)
+        })
         .map(|each| return each.0)
         .collect();
 
@@ -279,7 +388,7 @@ fn load_derfile(path: &path::Path) -> io::Result<Derfile> {
 
     // TODO
     // [x] variables from shell code
-    // [ ] stuff such as "echo $PATH" does not work
+    // [x] stuff such as "echo $PATH" does not work
     // E.i. instead of returning the value
     // of environmental variable $PATH(which could look like:
     // /home/user/.local/bin/:/usr/bin/:/usr/local/bin/ etc.) we just get the actual string
@@ -306,11 +415,11 @@ fn load_derfile(path: &path::Path) -> io::Result<Derfile> {
             if right_side.starts_with(CODE_SEP) {
                 if let Some(index) = right_side.find(CODE_SEP) {
                     let content = right_side[index + 1..right_side.len() - 1].to_string();
-                    value = vec![execute_code(content.clone()).expect("Error: unablet to parse code block.")];
+                    value =
+                        vec![execute_code(content.clone())
+                            .expect("Error: unablet to parse code block.")];
                 }
-            }
-                
-            else if right_side.contains(",") {
+            } else if right_side.contains(",") {
                 let split: Vec<String> = right_side
                     .split(",")
                     .map(|x| x.trim().to_string())
@@ -319,7 +428,7 @@ fn load_derfile(path: &path::Path) -> io::Result<Derfile> {
             } else {
                 value = vec![right_side.clone()]
             }
-           
+
             // Special keywords are defined in const CODE_KEYWORDS and each of them is manually
             // implemented here. So far, there's only "env", which is used to retrieve environmental
             // variables
@@ -335,17 +444,14 @@ fn load_derfile(path: &path::Path) -> io::Result<Derfile> {
                                     value = vec![env_output]
                                 }
                             }
-                            
-                        },
+                        }
                         _ => {}
                     }
-
                 }
             }
 
             derfile.add_var(name, value)
         }
-
     }
 
     let lines: Vec<String> = lines.clone().map(|x| x.to_string()).collect();
@@ -457,7 +563,7 @@ fn run(args: Args) -> io::Result<()> {
             Arg::Derfile(file) => {
                 let derfile = Some(load_derfile(path::Path::new(&file)).unwrap());
                 println!("{:#?}", derfile.as_ref().unwrap());
-            },
+            }
             Arg::Apply => {
                 // TODO:
                 // we want to take a derfile and parse it
@@ -469,11 +575,31 @@ fn run(args: Args) -> io::Result<()> {
                     return Ok(());
                 }
 
-                if !derfile.is_some() {
+                if !derfile.is_none() {
                     derfile = Some(load_derfile(derfile_default_path)?);
                 }
 
-            },
+                let mut templates = derfile
+                    .clone()
+                    .unwrap()
+                    .templates
+                    .values()
+                    .map(|t| t.clone().into())
+                    .collect::<Vec<TemplateFile>>();
+                for each_template in templates.iter_mut() {
+                    each_template.apply()?;
+                }
+                    
+            }
+            Arg::Parse(parse_args) => {
+                // TODO: test this please!
+                let hostnames = parse_args[3..].to_vec();
+                let template_config =
+                    TemplateFile::new(parse_args[0].clone(), parse_args[1].clone(), parse_args[2].clone(), hostnames);
+                if let Some(temp) = template_config.parse() {
+                    println!("{:#?}", temp)
+                }
+            }
             Arg::Help => {
                 help_function();
             }

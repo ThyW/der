@@ -1,0 +1,10 @@
+$hosts = host1, host2
+$path = ../out/
+
+[file_one.t]
+final_name = file_one
+hostnames = $hosts
+
+[file_two.t]
+final_name = vimrc
+hostnames = $hosts
