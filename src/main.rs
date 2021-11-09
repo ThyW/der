@@ -5,13 +5,12 @@ use std::io;
 use std::path;
 use std::process;
 
-const TEMPLATE_LEFT: &str = "[";
-const TEMPLATE_RIGHT: &str = "]";
-const CODE_SEP: &str = "`";
-const VAR_PREF: &str = "$";
-const CODE_KEYWORDS: [&str; 1] = ["env"];
-const TEMP_START: &str = "@@";
-const TEMP_END: &str = "@!";
+mod error;
+mod derfile;
+mod template;
+
+use derfile::*;
+use template::*;
 
 type Args = Vec<Arg>;
 
@@ -22,270 +21,6 @@ enum Arg {
     Apply,
 }
 
-#[derive(Debug, Clone, Default)]
-struct Template {
-    name: String,
-    final_name: String,
-    hostnames: Vec<String>,
-    apply_path: String,
-}
-
-#[derive(Debug, Clone, Default)]
-struct Variable {
-    _name: String,
-    value: Vec<String>,
-}
-
-#[derive(Debug, Clone, Default)]
-struct Derfile {
-    templates: HashMap<String, Template>,
-    vars: HashMap<String, Variable>,
-}
-
-#[derive(Debug, Clone)]
-struct TemplateFile {
-    path: String,
-    final_name: String,
-    apply_path: String,
-    hostnames: Vec<String>,
-}
-
-#[derive(Debug, Clone)]
-struct ParsedTemplate(String);
-
-impl TemplateFile {
-    fn new(path: String, final_name: String, apply_path: String, hostnames: Vec<String>) -> Self {
-        Self {
-            path,
-            final_name,
-            apply_path,
-            hostnames,
-        }
-    }
-
-    fn parse(&self) -> Option<ParsedTemplate> {
-        // [x] make sure the file even exists
-        // [x] make sure there is an equal number of opening and closing template code symbols
-        // [x] maybe make the actuall parsing more pretty, maybe even implement it just by removing
-        // the unwanted lines? eg. the code block start and end files
-        // [x] fix the bug, where code_block lines that are not valid for the current host name
-        // still get included into the output file
-        let mut ret = String::new();
-        let hostname = env::var("HOSTNAME");
-        let mut lines_to_add: Vec<(Vec<String>, usize, usize)> = Vec::new();
-        if hostname.is_err() {
-            eprintln!("Error when parsing template file: Unable to get the value of $HOSTNAME environment variable!");
-            return None;
-        }
-        if !self.hostnames.contains(hostname.as_ref().unwrap()) {
-            eprintln!(
-                "Warning: $HOSTNAME not in hostnames for template file: {}",
-                self.path
-            )
-        }
-        if !path::Path::new(&self.path).exists() {
-            return None;
-        }
-
-        let file_lines = fs::read_to_string(&self.path)
-            .expect(&format!("Error: Failed to read tempalte {}", &self.path).to_string());
-
-        // find all template code blocks
-        let mut code_block_lines: Vec<(usize, String)> = Vec::new();
-        for (ii, line) in file_lines.lines().enumerate() {
-            if line.starts_with(TEMP_START) || line.starts_with(TEMP_END) {
-                code_block_lines.push((ii, line.to_string()));
-            }
-        }
-
-        // check if all blocks are closed
-        let open_code_blocks_count = code_block_lines
-            .iter()
-            .filter(|x| x.1.starts_with(TEMP_START))
-            .count();
-        let closed_code_blocks_count = code_block_lines
-            .iter()
-            .filter(|x| x.1.starts_with(TEMP_END))
-            .count();
-
-        if open_code_blocks_count != closed_code_blocks_count {
-            eprintln!("Error when parsing template file: Open template blocks don't match closed template blocks!");
-            return None;
-        }
-
-        if open_code_blocks_count == 0 {
-            eprintln!("No code blocks were found in file {}", self.path);
-            return Some(ParsedTemplate(file_lines));
-        }
-
-        let file_lines_vec = file_lines
-            .lines()
-            .map(ToString::to_string)
-            .collect::<Vec<String>>();
-
-        // get all the lines and their indecies for substitution in the result file
-        for chunk in code_block_lines.chunks(2) {
-            let code_block_start_index = chunk[0].0;
-            let code_block_end_index = chunk[1].0;
-
-            let current_code_block =
-                file_lines_vec[code_block_start_index + 1..code_block_end_index].to_vec();
-            let code_block_first_line = &chunk[0].1;
-            let code_block_first_line_wo_prefix =
-                code_block_first_line.strip_prefix(TEMP_START)?.to_string();
-            // split line by `,` to get a list of hostnames on which the code block sohould be
-            // applied
-            let possible_hostnames = code_block_first_line_wo_prefix
-                .split(",")
-                .into_iter()
-                .map(|x| x.trim())
-                .map(ToString::to_string)
-                .collect::<Vec<String>>()
-                .to_vec();
-
-            for each in possible_hostnames {
-                if &each == hostname.as_ref().unwrap() {
-                    lines_to_add.push((
-                        current_code_block.clone(),
-                        code_block_start_index,
-                        code_block_end_index + 1,
-                    ))
-                }
-            }
-        }
-
-        let mut parsed_code_blocks = Vec::new();
-        for chunk in code_block_lines.chunks(2) {
-            let code_block_first_line = &chunk[0].1;
-            let code_block_start_index = chunk[0].0;
-
-            let code_block_second_line = &chunk[1].1;
-            let code_block_end_index = chunk[1].0;
-
-            let possible_hostnames = code_block_first_line
-                .strip_prefix(TEMP_START)?
-                .split(",")
-                .into_iter()
-                .map(|x| x.trim())
-                .map(ToString::to_string)
-                .collect::<Vec<String>>()
-                .to_vec();
-
-            parsed_code_blocks.push((
-                code_block_first_line.clone(),
-                code_block_start_index,
-                code_block_second_line.clone(),
-                code_block_end_index,
-                possible_hostnames,
-            ))
-        }
-
-        // last line before code block
-        let mut last_ln = 0;
-        for (ii, each) in parsed_code_blocks.iter().enumerate() {
-            // begin line, start line number of code block, end line, end line number of
-            // code_block, hostnames for this code block
-            let mut good_codeblock = false;
-            let (start_line, start, end_line, end, hostnames) = each;
-
-            // aaaaa
-            // @@good
-            // stuff
-            // @!
-            // @@bad
-            // more stuff
-            // @!
-            // bbbb
-            if hostnames.contains(&hostname.as_ref().unwrap()) {
-                good_codeblock = true
-            }
-
-            if good_codeblock {
-                ret.push_str(&file_lines_vec[last_ln..*start].join("\n"));
-                ret.push('\n');
-                let cloned_block = &file_lines_vec[*start..=*end];
-                let mut parsed_block = cloned_block
-                    .iter()
-                    .filter(|x| x != &start_line && x != &end_line)
-                    .map(|x| x.clone())
-                    .collect::<Vec<String>>()
-                    .to_vec();
-                let mut ready_block = parsed_block
-                    .iter_mut()
-                    .map(|x| {
-                        if x.is_empty() {
-                            String::from("\n")
-                        } else {
-                            x.to_string()
-                        }
-                    })
-                    .collect::<Vec<String>>()
-                    .to_vec();
-                if ready_block.len() == 1 {
-                    ready_block[0].push('\n');
-                }
-                ret.push_str(&ready_block.join("\n"));
-                last_ln = *end + 1;
-            } else {
-                last_ln = *end + 1
-            }
-            if ii == parsed_code_blocks.len() - 1 {
-                ret.push_str(&file_lines_vec[*end + 1..].join("\n"));
-            }
-        }
-        println!("=== new file ===");
-        println!("{}", ret);
-        println!("=== end file ===");
-
-        /* let mut line_nr_before_code_block = 0;
-        for (ii, parsed_block) in lines_to_add.iter().enumerate() {
-            let (lines, begin, end) = parsed_block;
-            ret.push_str(&file_lines_vec[line_nr_before_code_block..*begin].join("\n"));
-            ret.push_str(&lines[..].join("\n"));
-            line_nr_before_code_block = *end;
-            if ii == lines_to_add.len() - 1 {
-                ret.push_str(&file_lines_vec[*end..].join("\n"));
-                ret.push('\n')
-            }
-        } */
-
-        Some(ParsedTemplate(ret))
-    }
-
-    fn apply(&mut self) -> io::Result<()> {
-        let parsed = self.parse();
-        if parsed.is_none() {
-            return Ok(());
-        }
-
-        if self.apply_path.ends_with("/") {
-            self.apply_path.push_str(&self.final_name);
-        } else {
-            self.apply_path.push('/');
-            self.apply_path.push_str(&self.final_name)
-        }
-        let output_path = path::Path::new(&self.apply_path);
-        if output_path.exists() {
-            fs::write(output_path, parsed.unwrap().0)?;
-        } else {
-            fs::create_dir_all(output_path.parent().expect("This shouldn't fail?"))?;
-            fs::write(output_path, parsed.unwrap().0)?
-        }
-
-        Ok(())
-    }
-}
-
-impl From<Template> for TemplateFile {
-    fn from(other: Template) -> Self {
-        Self {
-            path: other.name.clone(),
-            final_name: other.final_name.clone(),
-            apply_path: other.apply_path.clone(),
-            hostnames: other.hostnames.clone(),
-        }
-    }
-}
 
 fn help_function() {
     println!("der v0.1");
@@ -297,106 +32,6 @@ fn help_function() {
     println!("-h --help  PATH                                           Show this help message.")
 }
 
-impl Template {
-    fn set_name(&mut self, name: String) {
-        self.name = name
-    }
-
-    fn set_final_name(&mut self, final_name: String) {
-        self.final_name = final_name
-    }
-
-    fn add_hostname(&mut self, hostname: String) {
-        self.hostnames.push(hostname)
-    }
-
-    fn set_apply_path(&mut self, apply_path: String) {
-        self.apply_path = apply_path
-    }
-}
-
-impl Variable {
-    fn new(_name: String, value: Vec<String>) -> Self {
-        Self { _name, value }
-    }
-}
-
-impl Derfile {
-    fn add_template(&mut self, name: String) {
-        self.templates.insert(name, Default::default());
-    }
-
-    fn get_template(&mut self, name: &String) -> Option<&mut Template> {
-        self.templates.get_mut(name)
-    }
-
-    fn add_var(&mut self, name: String, value: Vec<String>) {
-        self.vars.insert(name.clone(), Variable::new(name, value));
-    }
-
-    fn get_var(&mut self, name: &String) -> Option<&mut Variable> {
-        self.vars.get_mut(name)
-    }
-
-    fn parse(&mut self) -> Self {
-        let mut derfile: Derfile = Default::default();
-        let mut self_clone = self.clone();
-        for (template_name, template) in self.templates.iter() {
-            derfile.add_template(template_name.clone());
-            let mut temp = derfile.get_template(&template_name).unwrap();
-            temp.name = template_name.to_string();
-            if template.final_name.starts_with(VAR_PREF) {
-                let variable_name = template
-                    .final_name
-                    .strip_prefix(VAR_PREF)
-                    .unwrap()
-                    .to_string();
-
-                if let Some(variable) = self_clone.get_var(&variable_name) {
-                    let mut temp = derfile.get_template(&template.name).unwrap();
-                    temp.final_name = variable.value[0].clone(); // only take the fist value, sicne we only accept only one final file name
-                }
-            } else {
-                let mut temp = derfile.get_template(&template_name).unwrap();
-                temp.final_name = template.final_name.clone();
-            }
-            if template.apply_path.starts_with(VAR_PREF) {
-                let variable_name = template
-                    .apply_path
-                    .strip_prefix(VAR_PREF)
-                    .unwrap()
-                    .to_string();
-
-                if let Some(variable) = self_clone.get_var(&variable_name) {
-                    let mut template = derfile.get_template(&template.name).unwrap();
-                    template.apply_path = variable.value[0].clone(); // only take the first value, since we only accpet one apply path now
-                }
-            } else {
-                let mut temp = derfile.get_template(&template_name).unwrap();
-                temp.apply_path = template.apply_path.clone()
-            }
-            let mut hostname_clone: Vec<String> = Vec::new();
-            for hostname_entry in template.hostnames.iter() {
-                if hostname_entry.starts_with(VAR_PREF) {
-                    if let Some(variable) = self_clone
-                        .get_var(&hostname_entry.strip_prefix(VAR_PREF).unwrap().to_string())
-                    {
-                        let mut variable_value = variable.value.clone();
-                        hostname_clone.append(&mut variable_value);
-                    }
-                } else {
-                    hostname_clone.push(hostname_entry.to_string())
-                }
-            }
-
-            let template = derfile.get_template(&template.name).unwrap();
-            template.hostnames = hostname_clone
-        }
-        derfile.vars = self.vars.clone();
-
-        derfile
-    }
-}
 
 fn parse_args(args: Vec<String>) -> Args {
     let mut ret = Vec::new();
@@ -450,8 +85,8 @@ fn execute_code(command: String) -> Option<String> {
 // TODO:
 //  [x] templates
 //  [x] variables ->
-//      [x] variable from code execution?
-//      [ ] find out what's wrong with it, it for example can't access environmental variables
+//  [x] variable from code execution?
+//  [ ] find out what's wrong with it, it for example can't access environmental variables
 fn load_derfile(path: &path::Path) -> io::Result<Derfile> {
     let buffer = fs::read_to_string(path)?;
     let mut derfile: Derfile = Default::default();
@@ -675,7 +310,7 @@ fn run(args: Args) -> io::Result<()> {
                 }
             }
             Arg::Debug(parse_args) => {
-                // TODO: test this please!
+                // [x] TODO: test this please! [TESTING DONE]
                 let hostnames = parse_args[3..].to_vec();
                 let mut template_config = TemplateFile::new(
                     parse_args[0].clone(),
