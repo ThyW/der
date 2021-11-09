@@ -1,4 +1,5 @@
 use super::derfile;
+use super::error::*;
 
 pub const TEMP_START: &str = "@@";
 pub const TEMP_END: &str = "@!";
@@ -6,7 +7,6 @@ pub const TEMP_END: &str = "@!";
 use std::fs;
 use std::env;
 use std::path;
-use std::io;
 
 #[derive(Debug, Clone)]
 pub struct TemplateFile {
@@ -29,7 +29,7 @@ impl TemplateFile {
         }
     }
 
-    pub fn parse(&self) -> Option<ParsedTemplate> {
+    pub fn parse(&self) -> Result<ParsedTemplate> {
         // [x] make sure the file even exists
         // [x] make sure there is an equal number of opening and closing template code symbols
         // [x] maybe make the actuall parsing more pretty, maybe even implement it just by removing
@@ -37,20 +37,15 @@ impl TemplateFile {
         // [x] fix the bug, where code_block lines that are not valid for the current host name
         // still get included into the output file
         let mut ret = String::new();
-        let hostname = env::var("HOSTNAME");
-        let mut lines_to_add: Vec<(Vec<String>, usize, usize)> = Vec::new();
-        if hostname.is_err() {
-            eprintln!("Error when parsing template file: Unable to get the value of $HOSTNAME environment variable!");
-            return None;
-        }
-        if !self.hostnames.contains(hostname.as_ref().unwrap()) {
+        let hostname = env::var("HOSTNAME")?;
+        if !self.hostnames.contains(&hostname) {
             eprintln!(
                 "Warning: $HOSTNAME not in hostnames for template file: {}",
                 self.path
             )
         }
         if !path::Path::new(&self.path).exists() {
-            return None;
+            return Err("Error parsing template file: File does not exist1".into());
         }
 
         let file_lines = fs::read_to_string(&self.path)
@@ -75,50 +70,18 @@ impl TemplateFile {
             .count();
 
         if open_code_blocks_count != closed_code_blocks_count {
-            eprintln!("Error when parsing template file: Open template blocks don't match closed template blocks!");
-            return None;
+            return Err("Error when parsing template file: Open template blocks don't match closed template blocks!".into());
         }
 
         if open_code_blocks_count == 0 {
             eprintln!("No code blocks were found in file {}", self.path);
-            return Some(ParsedTemplate(file_lines));
+            return Ok(ParsedTemplate(file_lines))
         }
 
         let file_lines_vec = file_lines
             .lines()
             .map(ToString::to_string)
             .collect::<Vec<String>>();
-
-        // get all the lines and their indecies for substitution in the result file
-        for chunk in code_block_lines.chunks(2) {
-            let code_block_start_index = chunk[0].0;
-            let code_block_end_index = chunk[1].0;
-
-            let current_code_block =
-                file_lines_vec[code_block_start_index + 1..code_block_end_index].to_vec();
-            let code_block_first_line = &chunk[0].1;
-            let code_block_first_line_wo_prefix =
-                code_block_first_line.strip_prefix(TEMP_START)?.to_string();
-            // split line by `,` to get a list of hostnames on which the code block sohould be
-            // applied
-            let possible_hostnames = code_block_first_line_wo_prefix
-                .split(",")
-                .into_iter()
-                .map(|x| x.trim())
-                .map(ToString::to_string)
-                .collect::<Vec<String>>()
-                .to_vec();
-
-            for each in possible_hostnames {
-                if &each == hostname.as_ref().unwrap() {
-                    lines_to_add.push((
-                        current_code_block.clone(),
-                        code_block_start_index,
-                        code_block_end_index + 1,
-                    ))
-                }
-            }
-        }
 
         let mut parsed_code_blocks = Vec::new();
         for chunk in code_block_lines.chunks(2) {
@@ -129,7 +92,8 @@ impl TemplateFile {
             let code_block_end_index = chunk[1].0;
 
             let possible_hostnames = code_block_first_line
-                .strip_prefix(TEMP_START)?
+                .strip_prefix(TEMP_START)
+                .unwrap()
                 .split(",")
                 .into_iter()
                 .map(|x| x.trim())
@@ -154,7 +118,7 @@ impl TemplateFile {
             let mut good_codeblock = false;
             let (start_line, start, end_line, end, hostnames) = each;
 
-            if hostnames.contains(&hostname.as_ref().unwrap()) {
+            if hostnames.contains(&hostname) {
                 good_codeblock = true
             }
 
@@ -195,14 +159,11 @@ impl TemplateFile {
         println!("{}", ret);
         println!("=== end file ===");
 
-        Some(ParsedTemplate(ret))
+        Ok(ParsedTemplate(ret))
     }
 
-    pub fn apply(&mut self) -> io::Result<()> {
-        let parsed = self.parse();
-        if parsed.is_none() {
-            return Ok(());
-        }
+    pub fn apply(&mut self) -> Result {
+        let parsed = self.parse()?;
 
         if self.apply_path.ends_with("/") {
             self.apply_path.push_str(&self.final_name);
@@ -212,10 +173,10 @@ impl TemplateFile {
         }
         let output_path = path::Path::new(&self.apply_path);
         if output_path.exists() {
-            fs::write(output_path, parsed.unwrap().0)?;
+            fs::write(output_path, parsed.0)?;
         } else {
             fs::create_dir_all(output_path.parent().expect("This shouldn't fail?"))?;
-            fs::write(output_path, parsed.unwrap().0)?
+            fs::write(output_path, parsed.0)?
         }
 
         Ok(())

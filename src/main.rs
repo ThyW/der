@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::env;
 use std::fs;
-use std::io;
 use std::path;
 use std::process;
 
@@ -11,6 +10,7 @@ mod template;
 
 use derfile::*;
 use template::*;
+use error::*;
 
 type Args = Vec<Arg>;
 
@@ -49,37 +49,25 @@ fn parse_args(args: Vec<String>) -> Args {
     ret
 }
 
-fn execute_code(command: String) -> Option<String> {
-    let output: Option<String>;
+fn execute_code(command: String) -> Result<String> {
     let vars: HashMap<String, String> = env::vars().collect();
     if command.contains(" ") {
         let split: Vec<&str> = command.split(" ").collect();
         let cmd = split[0];
         let args = &split[1..];
 
-        let process = process::Command::new(cmd).args(args).envs(&vars).output();
+        let output = process::Command::new(cmd).args(args).envs(&vars).output()?;
 
-        if let Ok(out) = process {
-            let str = std::str::from_utf8(&out.stdout);
-            let str = str.expect("ERROR: Unable to convert command output to string");
-            output = Some(str.to_string().trim().to_string())
-        } else {
-            eprintln!("ERROR: code block exited with exited with an error.");
-            output = Some("".to_string())
-        }
+        let str = std::str::from_utf8(&output.stdout);
+        let str = str.expect("ERROR: Unable to convert command output to string");
+        return Ok(str.to_string().trim().to_string());
     } else {
-        let process = process::Command::new(command).envs(&vars).output();
-        if let Ok(out) = process {
-            let str = std::str::from_utf8(&out.stdout);
-            let str = str.expect("ERROR: Unable to convert command output to string.");
-            output = Some(str.to_string().trim().to_string())
-        } else {
-            eprintln!("ERROR: code block exited with exited with an error.");
-            output = Some("".to_string())
-        }
-    }
+        let output = process::Command::new(command).envs(&vars).output()?;
 
-    output
+        let str = std::str::from_utf8(&output.stdout);
+        let str = str.expect("ERROR: Unable to convert command output to string.");
+        return Ok(str.to_string().trim().to_string());
+    }
 }
 
 // TODO:
@@ -87,7 +75,7 @@ fn execute_code(command: String) -> Option<String> {
 //  [x] variables ->
 //  [x] variable from code execution?
 //  [ ] find out what's wrong with it, it for example can't access environmental variables
-fn load_derfile(path: &path::Path) -> io::Result<Derfile> {
+fn load_derfile(path: &path::Path) -> Result<Derfile> {
     let buffer = fs::read_to_string(path)?;
     let mut derfile: Derfile = Default::default();
     let lines = buffer.lines();
@@ -279,19 +267,18 @@ fn load_derfile(path: &path::Path) -> io::Result<Derfile> {
     Ok(derfile.parse())
 }
 
-fn run(args: Args) -> io::Result<()> {
+fn run(args: Args) -> Result {
     let mut derfile: Option<Derfile> = None;
     for arg in args {
         match arg {
             Arg::Derfile(file) => {
-                derfile = Some(load_derfile(path::Path::new(&file)).unwrap());
-                println!("{:#?}", derfile)
+                derfile = Some(load_derfile(path::Path::new(&file))?);
             }
             Arg::Apply => {
                 let derfile_default_path = path::Path::new("derfile");
 
                 if !derfile_default_path.exists() {
-                    return Ok(());
+                    return Err("Error: No derfile path specified or present!".into());
                 }
 
                 if derfile.is_none() {
@@ -318,11 +305,7 @@ fn run(args: Args) -> io::Result<()> {
                     parse_args[2].clone(),
                     hostnames,
                 );
-                if let Ok(_) = template_config.apply() {
-                    println!("Success")
-                } else {
-                    println!("bad + bad")
-                }
+                template_config.apply()?
             }
             Arg::Help => {
                 help_function();
@@ -333,7 +316,7 @@ fn run(args: Args) -> io::Result<()> {
     Ok(())
 }
 
-fn main() -> io::Result<()> {
+fn main() -> Result {
     let args: Vec<String> = env::args().collect();
     let parsed_args = parse_args(args);
     run(parsed_args)?;
