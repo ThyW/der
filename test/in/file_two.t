@@ -1,9 +1,13 @@
 set nu, rnu
 syntax on
-@+hostname=host1
+
+@@legionnaire
 let g:mapleader = ' '
-@
-@+hostname=host2
+
+@!
+
+@@legionnaire, test
 let g:mapleader = ','
-@
+
+@!
 echo "hello"

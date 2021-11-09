@@ -11,14 +11,14 @@ const CODE_SEP: &str = "`";
 const VAR_PREF: &str = "$";
 const CODE_KEYWORDS: [&str; 1] = ["env"];
 const TEMP_START: &str = "@@";
-const TEMP_END: &str = "@";
+const TEMP_END: &str = "@!";
 
 type Args = Vec<Arg>;
 
 enum Arg {
     Help,
     Derfile(String),
-    Parse(Vec<String>),
+    Debug(Vec<String>),
     Apply,
 }
 
@@ -54,12 +54,7 @@ struct TemplateFile {
 struct ParsedTemplate(String);
 
 impl TemplateFile {
-    fn new(
-        path: String,
-        final_name: String,
-        apply_path: String,
-        hostnames: Vec<String>,
-    ) -> Self {
+    fn new(path: String, final_name: String, apply_path: String, hostnames: Vec<String>) -> Self {
         Self {
             path,
             final_name,
@@ -71,6 +66,10 @@ impl TemplateFile {
     fn parse(&self) -> Option<ParsedTemplate> {
         // [x] make sure the file even exists
         // [x] make sure there is an equal number of opening and closing template code symbols
+        // [x] maybe make the actuall parsing more pretty, maybe even implement it just by removing
+        // the unwanted lines? eg. the code block start and end files
+        // [x] fix the bug, where code_block lines that are not valid for the current host name
+        // still get included into the output file
         let mut ret = String::new();
         let hostname = env::var("HOSTNAME");
         let mut lines_to_add: Vec<(Vec<String>, usize, usize)> = Vec::new();
@@ -95,7 +94,7 @@ impl TemplateFile {
         let mut code_block_lines: Vec<(usize, String)> = Vec::new();
         for (ii, line) in file_lines.lines().enumerate() {
             if line.starts_with(TEMP_START) || line.starts_with(TEMP_END) {
-                code_block_lines.push((ii, line.to_string()))
+                code_block_lines.push((ii, line.to_string()));
             }
         }
 
@@ -108,6 +107,7 @@ impl TemplateFile {
             .iter()
             .filter(|x| x.1.starts_with(TEMP_END))
             .count();
+
         if open_code_blocks_count != closed_code_blocks_count {
             eprintln!("Error when parsing template file: Open template blocks don't match closed template blocks!");
             return None;
@@ -118,23 +118,27 @@ impl TemplateFile {
             return Some(ParsedTemplate(file_lines));
         }
 
-        // get all the lines and their indecies for substitution in the result file
-        for (ii, each) in code_block_lines.iter().enumerate() {
-            let code_block_start_index = each.0;
-            let code_block_end_index = code_block_lines[ii + 1].0;
+        let file_lines_vec = file_lines
+            .lines()
+            .map(ToString::to_string)
+            .collect::<Vec<String>>();
 
-            let current_code_block = file_lines
-                .lines()
-                .map(ToString::to_string)
-                .collect::<Vec<String>>()[code_block_start_index..code_block_end_index]
-                .to_vec();
-            let code_block_first_line = &current_code_block[0];
+        // get all the lines and their indecies for substitution in the result file
+        for chunk in code_block_lines.chunks(2) {
+            let code_block_start_index = chunk[0].0;
+            let code_block_end_index = chunk[1].0;
+
+            let current_code_block =
+                file_lines_vec[code_block_start_index + 1..code_block_end_index].to_vec();
+            let code_block_first_line = &chunk[0].1;
             let code_block_first_line_wo_prefix =
-                code_block_first_line.strip_suffix("@@")?.to_string();
-            // split line by `,` to get a list of hostnames on which we want to apply
+                code_block_first_line.strip_prefix(TEMP_START)?.to_string();
+            // split line by `,` to get a list of hostnames on which the code block sohould be
+            // applied
             let possible_hostnames = code_block_first_line_wo_prefix
                 .split(",")
                 .into_iter()
+                .map(|x| x.trim())
                 .map(ToString::to_string)
                 .collect::<Vec<String>>()
                 .to_vec();
@@ -142,25 +146,108 @@ impl TemplateFile {
             for each in possible_hostnames {
                 if &each == hostname.as_ref().unwrap() {
                     lines_to_add.push((
-                        current_code_block[1..current_code_block.len() - 2].to_vec(),
+                        current_code_block.clone(),
                         code_block_start_index,
-                        code_block_end_index,
+                        code_block_end_index + 1,
                     ))
                 }
             }
         }
 
-        let mut line_nr_before_code_block = 0;
-        let file_lines_vec = file_lines
-            .lines()
-            .map(ToString::to_string)
-            .collect::<Vec<String>>();
-        for parsed_block in lines_to_add {
-            let (lines, begin, end) = parsed_block;
-            ret.push_str(&file_lines_vec[line_nr_before_code_block..begin].join("\n"));
-            ret.push_str(&lines.join("\n"));
-            line_nr_before_code_block = end
+        let mut parsed_code_blocks = Vec::new();
+        for chunk in code_block_lines.chunks(2) {
+            let code_block_first_line = &chunk[0].1;
+            let code_block_start_index = chunk[0].0;
+
+            let code_block_second_line = &chunk[1].1;
+            let code_block_end_index = chunk[1].0;
+
+            let possible_hostnames = code_block_first_line
+                .strip_prefix(TEMP_START)?
+                .split(",")
+                .into_iter()
+                .map(|x| x.trim())
+                .map(ToString::to_string)
+                .collect::<Vec<String>>()
+                .to_vec();
+
+            parsed_code_blocks.push((
+                code_block_first_line.clone(),
+                code_block_start_index,
+                code_block_second_line.clone(),
+                code_block_end_index,
+                possible_hostnames,
+            ))
         }
+
+        // last line before code block
+        let mut last_ln = 0;
+        for (ii, each) in parsed_code_blocks.iter().enumerate() {
+            // begin line, start line number of code block, end line, end line number of
+            // code_block, hostnames for this code block
+            let mut good_codeblock = false;
+            let (start_line, start, end_line, end, hostnames) = each;
+
+            // aaaaa
+            // @@good
+            // stuff
+            // @!
+            // @@bad
+            // more stuff
+            // @!
+            // bbbb
+            if hostnames.contains(&hostname.as_ref().unwrap()) {
+                good_codeblock = true
+            }
+
+            if good_codeblock {
+                ret.push_str(&file_lines_vec[last_ln..*start].join("\n"));
+                ret.push('\n');
+                let cloned_block = &file_lines_vec[*start..=*end];
+                let mut parsed_block = cloned_block
+                    .iter()
+                    .filter(|x| x != &start_line && x != &end_line)
+                    .map(|x| x.clone())
+                    .collect::<Vec<String>>()
+                    .to_vec();
+                let mut ready_block = parsed_block
+                    .iter_mut()
+                    .map(|x| {
+                        if x.is_empty() {
+                            String::from("\n")
+                        } else {
+                            x.to_string()
+                        }
+                    })
+                    .collect::<Vec<String>>()
+                    .to_vec();
+                if ready_block.len() == 1 {
+                    ready_block[0].push('\n');
+                }
+                ret.push_str(&ready_block.join("\n"));
+                last_ln = *end + 1;
+            } else {
+                last_ln = *end + 1
+            }
+            if ii == parsed_code_blocks.len() - 1 {
+                ret.push_str(&file_lines_vec[*end + 1..].join("\n"));
+            }
+        }
+        println!("=== new file ===");
+        println!("{}", ret);
+        println!("=== end file ===");
+
+        /* let mut line_nr_before_code_block = 0;
+        for (ii, parsed_block) in lines_to_add.iter().enumerate() {
+            let (lines, begin, end) = parsed_block;
+            ret.push_str(&file_lines_vec[line_nr_before_code_block..*begin].join("\n"));
+            ret.push_str(&lines[..].join("\n"));
+            line_nr_before_code_block = *end;
+            if ii == lines_to_add.len() - 1 {
+                ret.push_str(&file_lines_vec[*end..].join("\n"));
+                ret.push('\n')
+            }
+        } */
 
         Some(ParsedTemplate(ret))
     }
@@ -175,7 +262,7 @@ impl TemplateFile {
             self.apply_path.push_str(&self.final_name);
         } else {
             self.apply_path.push('/');
-            self.apply_path.push_str(&self.final_name) 
+            self.apply_path.push_str(&self.final_name)
         }
         let output_path = path::Path::new(&self.apply_path);
         if output_path.exists() {
@@ -204,9 +291,10 @@ fn help_function() {
     println!("der v0.1");
     println!("author: J. Kapko <kamo.bavmesa@gmail.com>");
     println!("about: der is a tool for qucik multisystem application of dotfiles, with template supporting.\n");
-    println!("-a --apply       apply dotfiles to a path.");
-    println!("-f --file PATH        use a specified derfile.");
-    println!("-h --help PATH        show this help message.")
+    println!("-a --apply PATH                                           Apply using  specified path to derfile.");
+    println!("-f --file  PATH                                           Use a specified derfile.");
+    println!("-d --debug PATH FINAL_NAME APPLY_PATH [HOSTNAMES]         Use a specified derfile.");
+    println!("-h --help  PATH                                           Show this help message.")
 }
 
 impl Template {
@@ -317,7 +405,7 @@ fn parse_args(args: Vec<String>) -> Args {
         match &entry[..] {
             "-h" | "--help" => ret.push(Arg::Help),
             "-f" | "--file" => ret.push(Arg::Derfile(args[i + 1].clone())),
-            "-p" | "--parse" => ret.push(Arg::Parse(args[i..i + 3].to_vec())),
+            "-d" | "--debug" => ret.push(Arg::Debug(args[i + 1..].to_vec())),
             "-a" | "--apply" => ret.push(Arg::Apply),
             _ => (),
         }
@@ -561,21 +649,17 @@ fn run(args: Args) -> io::Result<()> {
     for arg in args {
         match arg {
             Arg::Derfile(file) => {
-                let derfile = Some(load_derfile(path::Path::new(&file)).unwrap());
-                println!("{:#?}", derfile.as_ref().unwrap());
+                derfile = Some(load_derfile(path::Path::new(&file)).unwrap());
+                println!("{:#?}", derfile)
             }
             Arg::Apply => {
-                // TODO:
-                // we want to take a derfile and parse it
-                // then parse all templates and output them to their respective apply paths
-                // these apply paths should be attempted to be created if they do not exist
-                let derfile_default_path = path::Path::new("./derfile");
+                let derfile_default_path = path::Path::new("derfile");
 
                 if !derfile_default_path.exists() {
                     return Ok(());
                 }
 
-                if !derfile.is_none() {
+                if derfile.is_none() {
                     derfile = Some(load_derfile(derfile_default_path)?);
                 }
 
@@ -589,15 +673,20 @@ fn run(args: Args) -> io::Result<()> {
                 for each_template in templates.iter_mut() {
                     each_template.apply()?;
                 }
-                    
             }
-            Arg::Parse(parse_args) => {
+            Arg::Debug(parse_args) => {
                 // TODO: test this please!
                 let hostnames = parse_args[3..].to_vec();
-                let template_config =
-                    TemplateFile::new(parse_args[0].clone(), parse_args[1].clone(), parse_args[2].clone(), hostnames);
-                if let Some(temp) = template_config.parse() {
-                    println!("{:#?}", temp)
+                let mut template_config = TemplateFile::new(
+                    parse_args[0].clone(),
+                    parse_args[1].clone(),
+                    parse_args[2].clone(),
+                    hostnames,
+                );
+                if let Ok(_) = template_config.apply() {
+                    println!("Success")
+                } else {
+                    println!("bad + bad")
                 }
             }
             Arg::Help => {

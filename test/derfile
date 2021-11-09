@@ -1,0 +1,17 @@
+$hosts = legionnaire, test
+$path = out/
+
+[in/file_one.t]
+final_name = file_one
+hostnames = $hosts
+apply_path = $path
+
+[in/file_two.t]
+final_name = vimrc
+hostnames = $hosts
+apply_path = $path
+
+[in/three.t]
+final_name = outside_test
+hostnames = $hosts
+apply_path = $path
