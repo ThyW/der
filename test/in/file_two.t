@@ -6,8 +6,7 @@ let g:mapleader = ' '
 
 @!
 
-@@legionnaire, test
+@@
 let g:mapleader = ','
-
 @!
 echo "hello"
