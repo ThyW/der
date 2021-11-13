@@ -134,11 +134,37 @@ hostnames = $hostnames
 apply_path = $bash_out
 ```
 
-Then, if we run the script from `dotfiles/`, we should have all templates applied and stowed to their exact locations.
+Then, if we run the script from `dotfiles/`, we should have all templates applied and `stow`ed to their exact locations.
 
 ## Template files
-**TODO** template files are still not implemented.
+Template files are really just your config file, with parts added for `der` to distinguish, which parts should be put on which machine.
 
+### Syntax
+Template files consist of normal text(parts of your configuration files, that you want to have on all the different machines) and so called `code blocks`. Code blocks are parts of the file which get included or excluded from the file, depending on the machine, or, the hostname for that fact. Code blocks look like this:
+
+```
+# Code blocks are declared by so, two @ followed by a list of comma separated values.
+# These values are hostnames for which the code blocks should be included in the output file.
+@@ hostname1,hostname2,hostname3 
+your code goes, here, 
+any number of lines
+or spaces, or anything
+@!
+# Code blocks end with a @ followed by !. These symbols must be on a new line.
+```
+
+### Example
+A simple real world example would be something like this:
+I have two machines that run [i3](https://i3wm.org), one is a laptop with one monitor(hostname: laptop), i.e. the main display and the other is my home laptop(hostname: desktop) with two monitors. What I want to achieve is to have a single line which tells i3 to execute an `xrandr` command only on my home laptop.
+```
+# file: config, an i3wm configuration file
+
+# this is what we could do:
+@@ desktop
+exec --no-startup-id xrandr --output eDP-1 --off && xrandr --output HDMI-1 --primary  && xrandr --output DP-1 --right-of HDMI-1 move $ws1 to output HDMI-1 move $ws2 to output DP-1
+@!
+```
+This solves the issue! If I clone my dotfiles, `der` them and check the output on both machines, on my home laptop I will be able to see the line which I wanted to have there and on the work laptop, the entire code block would be excluded.
 
 # Contributing
-Open an issue and if you feel like it, submit a PR.
+Open an issue, or, if you feel like it, submit a PR.
