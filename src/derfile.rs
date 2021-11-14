@@ -30,6 +30,7 @@ pub struct Variable {
 pub struct Derfile {
     pub templates: HashMap<String, Template>,
     pub vars: HashMap<String, Variable>,
+    path: path::PathBuf
 }
 
 impl Template {
@@ -89,7 +90,7 @@ impl Derfile {
 
                 if let Some(variable) = self_clone.get_var(&variable_name) {
                     let mut temp = derfile.get_template(&template.name).unwrap();
-                    temp.final_name = variable.value[0].clone(); // only take the fist value, sicne we only accept only one final file name
+                    temp.final_name = variable.value[0].clone(); // only take the fist value, sicne we only accept one final file name
                 }
             } else {
                 let mut temp = derfile.get_template(&template_name).unwrap();
@@ -104,10 +105,25 @@ impl Derfile {
 
                 if let Some(variable) = self_clone.get_var(&variable_name) {
                     let mut template = derfile.get_template(&template.name).unwrap();
-                    template.apply_path = variable.value[0].clone(); // only take the first value, since we only accpet one apply path now
+                    let variable_path_buf = path::PathBuf::from(&variable.value[0]);
+                    if variable_path_buf.is_absolute() {
+                        template.apply_path = variable.value[0].clone(); // only take the first value, since we only accpet one apply path now
+                    } else {
+                        let mut canonicalized_apply_path = self.path.clone().parent().unwrap().to_path_buf();
+                        canonicalized_apply_path.push(variable.value[0].clone());
+                        template.apply_path = canonicalized_apply_path.to_str().unwrap().to_string();
+                    }
                 }
             } else {
                 let mut temp = derfile.get_template(&template_name).unwrap();
+                let variable_path_buf = path::PathBuf::from(&temp.apply_path);
+                if variable_path_buf.is_absolute() {
+                    temp.apply_path = temp.apply_path.clone(); // only take the first value, since we only accpet one apply path now
+                } else {
+                    let mut canonicalized_apply_path = self.path.clone();
+                    canonicalized_apply_path.push(temp.apply_path.clone());
+                    temp.apply_path = canonicalized_apply_path.canonicalize().unwrap().to_str().unwrap().to_string();
+                }
                 temp.apply_path = template.apply_path.clone()
             }
             let mut hostname_clone: Vec<String> = Vec::new();
@@ -134,12 +150,13 @@ impl Derfile {
 
     // TODO:
     //  [x] templates
-    //  [x] variables ->
+    //  [x] variables
     //  [x] variable from code execution?
     //  [ ] find out what's wrong with it, it for example can't access environmental variables
     pub fn load_derfile(path: &path::Path) -> Result<Self> {
         let buffer = fs::read_to_string(path)?;
         let mut derfile: Derfile = Default::default();
+        derfile.path = path.to_path_buf();
         let lines = buffer.lines();
 
         // list of template definitions(lines that start with "[" and end with "]")
@@ -176,20 +193,13 @@ impl Derfile {
                 let split = line.split_at(line.find("=").unwrap());
                 let name = split.0.trim().strip_prefix(VAR_PREF).unwrap().to_string();
                 let mut value: Vec<String> = Vec::new();
-                let right_side = split
-                    .1
-                    .trim()
-                    .strip_prefix("=")
-                    .unwrap()
-                    .trim()
-                    .to_string();
+                let right_side = split.1.trim().strip_prefix("=").unwrap().trim().to_string();
 
                 if right_side.starts_with(CODE_SEP) {
                     if let Some(index) = right_side.find(CODE_SEP) {
                         let content = right_side[index + 1..right_side.len() - 1].to_string();
-                        value =
-                            vec![execute_code(content.clone())
-                                .expect("Error: unablet to parse code block.")];
+                        value = vec![execute_code(content.clone())
+                            .expect("Error: unablet to parse code block.")];
                     }
                 } else if right_side.contains(",") {
                     let split: Vec<String> = right_side
@@ -243,9 +253,16 @@ impl Derfile {
                     .collect();
             }
 
-            let template_name: String = template_lines[0][1..template_lines[0].len() - 1].to_string();
+            let mut template_name: String =
+                template_lines[0][1..template_lines[0].len() - 1].to_string();
             for line in template_lines.iter() {
                 if line.starts_with(TEMPLATE_LEFT) && line.ends_with(TEMPLATE_RIGHT) {
+                    // TODO: template name should be turned into absolute template path
+                    let mut derfile_dir_path =
+                        path.to_owned().clone().parent().unwrap().to_path_buf();
+                    derfile_dir_path.push(&template_name);
+                    template_name = derfile_dir_path.to_str().unwrap().to_string();
+
                     derfile.add_template(template_name.clone());
                     if let Some(template) = derfile.get_template(&template_name) {
                         template.set_name(template_name.clone())
@@ -261,21 +278,14 @@ impl Derfile {
                     match split.0.trim() {
                         "final_name" => {
                             if let Some(table) = derfile.get_template(&template_name) {
-                                table.set_final_name(
-                                    split
-                                        .1
-                                        .strip_prefix("=")
-                                        .unwrap()
-                                        .trim()
-                                        .to_string(),
-                                )
+                                let final_name = split.1.strip_prefix("=").unwrap().trim();
+                                table.set_final_name(final_name.to_string())
                             }
                         }
                         "hostnames" => {
                             if let Some(table) = derfile.get_template(&template_name) {
                                 if split.1.contains(",") {
-                                    let value_list: Vec<&str> =
-                                        split.1.split(',').collect();
+                                    let value_list: Vec<&str> = split.1.split(',').collect();
                                     for each in value_list {
                                         if let Some(s) = each.strip_prefix("=") {
                                             table.add_hostname(s.trim().to_string())
@@ -285,26 +295,15 @@ impl Derfile {
                                     }
                                 } else {
                                     table.add_hostname(
-                                        split
-                                            .1
-                                            .strip_prefix("=")
-                                            .unwrap()
-                                            .trim()
-                                            .to_string(),
+                                        split.1.strip_prefix("=").unwrap().trim().to_string(),
                                     )
                                 }
                             }
                         }
                         "apply_path" => {
                             if let Some(table) = derfile.get_template(&template_name) {
-                                table.set_apply_path(
-                                    split
-                                        .1
-                                        .strip_prefix("=")
-                                        .unwrap()
-                                        .trim()
-                                        .to_string(),
-                                )
+                                let apply_path = split.1.strip_prefix("=").unwrap().trim();
+                                table.set_apply_path(apply_path.to_string())
                             }
                         }
                         some => {

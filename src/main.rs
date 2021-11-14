@@ -81,17 +81,18 @@ fn run(args: Args) -> Result {
     for arg in args {
         match arg {
             Arg::Derfile(file) => {
-                derfile = Some(derfile::Derfile::load_derfile(path::Path::new(&file))?);
+                // canonicalized derfile path
+                derfile = Some(derfile::Derfile::load_derfile(&path::Path::new(&file).canonicalize().unwrap())?);
             }
             Arg::Apply => {
-                let derfile_default_path = path::Path::new("derfile");
+                let derfile_default_path = path::Path::new("./derfile").canonicalize();
 
-                if !derfile_default_path.exists() {
+                if !derfile_default_path.is_ok() && derfile.clone().is_none() {
                     return Err("Error: No derfile path specified or present!".into());
                 }
 
                 if derfile.is_none() {
-                    derfile = Some(derfile::Derfile::load_derfile(derfile_default_path)?);
+                    derfile = Some(derfile::Derfile::load_derfile(&derfile_default_path?)?);
                 }
 
                 let mut templates = derfile
@@ -130,6 +131,8 @@ fn main() -> Result {
     let parsed_args = parse_args(args);
 
     run(parsed_args)?;
+
+    println!("Success");
 
     Ok(())
 }

@@ -155,9 +155,9 @@ impl TemplateFile {
                 ret.push_str(&file_lines_vec[*end + 1..].join("\n"));
             }
         }
-        println!("=== new file ===");
+        /* println!("=== new file ===");
         println!("{}", ret);
-        println!("=== end file ===");
+        println!("=== end file ==="); */
 
         Ok(ParsedTemplate(ret))
     }
@@ -173,10 +173,10 @@ impl TemplateFile {
         }
         let output_path = path::Path::new(&self.apply_path);
         if output_path.exists() {
-            fs::write(output_path, parsed.0)?;
+            fs::write(output_path, parsed.0).unwrap();
         } else {
-            fs::create_dir_all(output_path.parent().expect("This shouldn't fail?"))?;
-            fs::write(output_path, parsed.0)?
+            fs::create_dir_all(output_path.parent().expect("This shouldn't fail?")).unwrap();
+            fs::write(output_path, parsed.0).unwrap()
         }
 
         Ok(())
