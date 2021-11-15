@@ -71,7 +71,7 @@ impl TemplateFile {
         // Find all template code blocks.
         let mut code_block_lines: Vec<(usize, String)> = Vec::new();
         for (ii, line) in file_lines.lines().enumerate() {
-            if line.starts_with(TEMP_START) || line.starts_with(TEMP_END) {
+            if line.contains(TEMP_START) || line.contains(TEMP_END) {
                 code_block_lines.push((ii, line.to_string()));
             }
         }
@@ -79,11 +79,11 @@ impl TemplateFile {
         // Check if all blocks are closed.
         let open_code_blocks_count = code_block_lines
             .iter()
-            .filter(|x| x.1.starts_with(TEMP_START))
+            .filter(|x| x.1.contains(TEMP_START))
             .count();
         let closed_code_blocks_count = code_block_lines
             .iter()
-            .filter(|x| x.1.starts_with(TEMP_END))
+            .filter(|x| x.1.contains(TEMP_END))
             .count();
 
         if open_code_blocks_count != closed_code_blocks_count {
@@ -108,7 +108,14 @@ impl TemplateFile {
             let code_block_second_line = &chunk[1].1;
             let code_block_end_index = chunk[1].0;
 
-            let possible_hostnames = code_block_first_line
+            let parsed_first_line = code_block_first_line.clone();
+            let mut parsed_first_line = parsed_first_line.as_str();
+
+            while parsed_first_line.starts_with(" ") {
+                parsed_first_line = parsed_first_line.trim_start();
+            }
+
+            let possible_hostnames = parsed_first_line
                 .strip_prefix(TEMP_START)
                 .unwrap()
                 .split(",")
@@ -187,6 +194,7 @@ impl TemplateFile {
             self.apply_path.push_str(&self.final_name)
         }
         let output_path = path::Path::new(&self.apply_path);
+        println!("{:#?}", output_path);
         if output_path.exists() {
             fs::write(output_path, parsed.0).unwrap();
         } else {
