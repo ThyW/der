@@ -1,26 +1,39 @@
-use super::derfile;
-use super::error::*;
+use crate::derfile;
+use crate::error::*;
 
+/// Begin and end code block symbols, these CAN be changed before compilation.
 pub const TEMP_START: &str = "@@";
 pub const TEMP_END: &str = "@!";
 
-use std::fs;
 use std::env;
+use std::fs;
 use std::path;
 
+/// Information needed for parsing a template file.
 #[derive(Debug, Clone)]
 pub struct TemplateFile {
+    /// Path to template file.
     pub path: String,
+    /// Name of the file to be output. Example: `alacritty.yml`
     pub final_name: String,
+    /// Directory to which the parsed template file should be placed: Example: `~/.config/alacritty/` 
     pub apply_path: String,
+    /// Hostnames for which the template file should be parsed.
     pub hostnames: Vec<String>,
 }
 
+/// String ouput of a parsed template file.
 #[derive(Debug, Clone)]
 pub struct ParsedTemplate(String);
 
 impl TemplateFile {
-    pub fn new(path: String, final_name: String, apply_path: String, hostnames: Vec<String>) -> Self {
+    /// Create a new instance of a `TemplateFile`.
+    pub fn new(
+        path: String,
+        final_name: String,
+        apply_path: String,
+        hostnames: Vec<String>,
+    ) -> Self {
         Self {
             path,
             final_name,
@@ -29,6 +42,7 @@ impl TemplateFile {
         }
     }
 
+    /// Parsed a template file and output a `ParsedTemplate` struct.
     pub fn parse(&self) -> Result<ParsedTemplate> {
         // [x] make sure the file even exists
         // [x] make sure there is an equal number of opening and closing template code symbols
@@ -36,6 +50,9 @@ impl TemplateFile {
         // the unwanted lines? eg. the code block start and end files
         // [x] fix the bug, where code_block lines that are not valid for the current host name
         // still get included into the output file
+
+
+        // Basic stuff.
         let mut ret = String::new();
         let hostname = env::var("HOSTNAME")?;
         if !self.hostnames.contains(&hostname) {
@@ -51,7 +68,7 @@ impl TemplateFile {
         let file_lines = fs::read_to_string(&self.path)
             .expect(&format!("Error: Failed to read tempalte {}", &self.path).to_string());
 
-        // find all template code blocks
+        // Find all template code blocks.
         let mut code_block_lines: Vec<(usize, String)> = Vec::new();
         for (ii, line) in file_lines.lines().enumerate() {
             if line.starts_with(TEMP_START) || line.starts_with(TEMP_END) {
@@ -59,7 +76,7 @@ impl TemplateFile {
             }
         }
 
-        // check if all blocks are closed
+        // Check if all blocks are closed.
         let open_code_blocks_count = code_block_lines
             .iter()
             .filter(|x| x.1.starts_with(TEMP_START))
@@ -75,7 +92,7 @@ impl TemplateFile {
 
         if open_code_blocks_count == 0 {
             eprintln!("No code blocks were found in file {}", self.path);
-            return Ok(ParsedTemplate(file_lines))
+            return Ok(ParsedTemplate(file_lines));
         }
 
         let file_lines_vec = file_lines
@@ -155,13 +172,11 @@ impl TemplateFile {
                 ret.push_str(&file_lines_vec[*end + 1..].join("\n"));
             }
         }
-        /* println!("=== new file ===");
-        println!("{}", ret);
-        println!("=== end file ==="); */
 
         Ok(ParsedTemplate(ret))
     }
 
+    /// Write a parsed template file to disk.
     pub fn apply(&mut self) -> Result {
         let parsed = self.parse()?;
 

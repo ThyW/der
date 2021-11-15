@@ -6,12 +6,14 @@ use std::path;
 use crate::error::*;
 use crate::execute_code;
 
+/// Symbols for derfile parsing, these can be changed before compilation.
 pub const TEMPLATE_LEFT: &str = "[";
 pub const TEMPLATE_RIGHT: &str = "]";
 pub const CODE_SEP: &str = "`";
 pub const VAR_PREF: &str = "$";
 pub const CODE_KEYWORDS: [&str; 1] = ["env"];
 
+/// Representation of a single template secition in a derfile.
 #[derive(Debug, Clone, Default)]
 pub struct Template {
     pub name: String,
@@ -20,12 +22,17 @@ pub struct Template {
     pub apply_path: String,
 }
 
+/// Representation of a single variable in a derfile.
 #[derive(Debug, Clone, Default)]
 pub struct Variable {
     pub _name: String,
     pub value: Vec<String>,
 }
 
+/// Representation of a derfile.
+/// `templates`: HashMap of templates and their names.
+/// `vars`: HashMap of variables and their names.
+/// `path`: Absolute path to a derfile.
 #[derive(Debug, Clone, Default)]
 pub struct Derfile {
     pub templates: HashMap<String, Template>,

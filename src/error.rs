@@ -1,8 +1,10 @@
 use std::io;
 use std::env;
 
+/// Custom wrapper for `Result`.
 pub type Result<T = ()> = std::result::Result<T, Error>;
 
+/// All the possible errors.
 #[derive(Debug)]
 pub enum Error {
     Io(io::Error),

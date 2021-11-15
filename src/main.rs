@@ -3,13 +3,13 @@ use std::env;
 use std::path;
 use std::process;
 
-mod error;
 mod derfile;
+mod error;
 mod template;
 
 use derfile::*;
-use template::*;
 use error::*;
+use template::*;
 
 /// Wrapper type for a list of parsed command line arguments
 type Args = Vec<Arg>;
@@ -22,7 +22,6 @@ enum Arg {
     Apply,
 }
 
-
 /// Help fucntion to be diplayed when the `-h` or `--help` flags are passed
 fn help_function() {
     println!("der v0.1");
@@ -34,11 +33,12 @@ fn help_function() {
     println!("-h --help  PATH                                           Show this help message.")
 }
 
-
 /// Pasre command line arguments
 fn parse_args(args: Vec<String>) -> Args {
+    // return vector of Args
     let mut ret = Vec::new();
 
+    // go through command line arguments and parse them accordingly
     for (i, entry) in args.iter().enumerate() {
         match &entry[..] {
             "-h" | "--help" => ret.push(Arg::Help),
@@ -54,7 +54,9 @@ fn parse_args(args: Vec<String>) -> Args {
 
 /// Attempt to execute shell code
 fn execute_code(command: String) -> Result<String> {
+    // Get a list of all environmental args.
     let vars: HashMap<String, String> = env::vars().collect();
+    // Split the command into its components.
     if command.contains(" ") {
         let split: Vec<&str> = command.split(" ").collect();
         let cmd = split[0];
@@ -63,27 +65,37 @@ fn execute_code(command: String) -> Result<String> {
         let output = process::Command::new(cmd).args(args).envs(&vars).output()?;
 
         let str = std::str::from_utf8(&output.stdout);
-        let str = str.expect("ERROR: Unable to convert command output to string");
-        return Ok(str.to_string().trim().to_string());
+        let str = str.expect(&format!(
+            "ERROR: Unable to convert command output to string! [Error value: {}]",
+            &command
+        ));
+        return Ok(str.trim().to_string());
     } else {
-        let output = process::Command::new(command).envs(&vars).output()?;
+        let output = process::Command::new(&command).envs(&vars).output()?;
 
         let str = std::str::from_utf8(&output.stdout);
-        let str = str.expect("ERROR: Unable to convert command output to string.");
-        return Ok(str.to_string().trim().to_string());
+        let str = str.expect(&format!(
+            "ERROR: Unable to convert command output to string! [Error value: {}]",
+            &command
+        ));
+        return Ok(str.trim().to_string());
     }
 }
-
 
 /// Parse arguments and run the application
 fn run(args: Args) -> Result {
     let mut derfile: Option<Derfile> = None;
     for arg in args {
         match arg {
+            // Specifiy a derfile to be used.
             Arg::Derfile(file) => {
-                // canonicalized derfile path
-                derfile = Some(derfile::Derfile::load_derfile(&path::Path::new(&file).canonicalize().unwrap())?);
+                // Get an absolute path to derfile.
+                derfile = Some(derfile::Derfile::load_derfile(
+                    &path::Path::new(&file).canonicalize().unwrap(),
+                )?);
             }
+
+            // Apply template files according to derfile rules.
             Arg::Apply => {
                 let derfile_default_path = path::Path::new("./derfile").canonicalize();
 
@@ -106,8 +118,8 @@ fn run(args: Args) -> Result {
                     each_template.apply()?;
                 }
             }
+            // This is used purely for debugging Template Files.
             Arg::Debug(parse_args) => {
-                // [x] TODO: test this please! [TESTING DONE]
                 let hostnames = parse_args[3..].to_vec();
                 let mut template_config = TemplateFile::new(
                     parse_args[0].clone(),
