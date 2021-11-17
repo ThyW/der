@@ -6,6 +6,7 @@ use std::process;
 mod derfile;
 mod error;
 mod template;
+mod utils;
 
 use derfile::*;
 use error::*;

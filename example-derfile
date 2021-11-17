@@ -1,21 +1,36 @@
 # comments are lines with hashtags
 $hosts = host1, host2, host3
 # variables are just in place text substitutions
-$path = /home/test/.config/test/
+$path = some/random/path/
 # hello will be stored in $hello
 $hello = `echo hello`
 
 [template_name1.toml.t]
 final_name = template_name1.yml
 hostnames = host1
-apply_path = $path
+apply_path = $path:tempdir
 
 [template_name2.yml.t]
 final_name = template_name2.yml
 hostnames = host1, host2
-apply_path = $path
+apply_path = $path:temp2dir
 
 [template_name3.txt.t]
 final_name = template_name3.yml
 hostnames = $hosts
+apply_path = $path:temp3dir
+
+# directory parsing
+[dir]
+final_name = outdirname
+hostnames = $hosts
 apply_path = $path
+# parse files in the directory, or just copy it accordingly
+parse_files = true, false
+# file extension to look for when parsing, other extensions will be ignored (you don't have to put in the dot[.])
+# extensions will be stripped when done parsing
+extensions = t, template, tmp, temp, tpl
+# go through all subdirectories and look for 
+recursive = true, false
+# keep the file structure, e.g. output directory will look the same as input directory
+keep_structure = true, false
