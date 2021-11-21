@@ -220,8 +220,8 @@ impl Derfile {
                 }
             }
 
-            let template = derfile.get_template(&template.name).unwrap();
-            template.hostnames = hostname_clone;
+            let mut t = derfile.get_template(&template.name).unwrap();
+            t.hostnames = hostname_clone;
 
             let mut extensions_clone: Vec<String> = Vec::new();
             for extension in template.extensions.iter() {
@@ -247,11 +247,11 @@ impl Derfile {
                     extensions_clone.push(extension.to_string())
                 }
             }
-            template.extensions = extensions_clone;
+            t.extensions = extensions_clone;
             let cloned = self_clone.get_template(&template_name).unwrap();
-            template.recursive = cloned.recursive;
-            template.parse_files = cloned.parse_files;
-            template.keep_structure = cloned.keep_structure;
+            t.recursive = cloned.recursive;
+            t.parse_files = cloned.parse_files;
+            t.keep_structure = cloned.keep_structure;
         }
         derfile.vars = self.vars.clone();
         derfile.path = self.path.clone();
@@ -455,10 +455,11 @@ impl Derfile {
                                 let field = split.1.strip_prefix("=").unwrap().trim();
                                 if field.contains(",") {
                                     for split_component in field.split(",") {
+                                        println!("{}", split_component.trim());
                                         table.add_extension(split_component.trim().to_string())
                                     }
                                 } else {
-                                    table.add_extension(field.to_string())
+                                    table.add_extension(field.trim().to_string())
                                 }
                             }
                         }

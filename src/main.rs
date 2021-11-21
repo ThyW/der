@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::env;
+use std::fs;
 use std::path;
 use std::process;
 
@@ -19,7 +20,7 @@ type Args = Vec<Arg>;
 enum Arg {
     Help,
     Derfile(String),
-    Debug(Vec<String>),
+    // Debug(Vec<String>),
     Apply,
 }
 
@@ -30,7 +31,7 @@ fn help_function() {
     println!("about: der is a tool for qucik multisystem application of dotfiles, with template supporting.\n");
     println!("-a --apply PATH                                           Apply using  specified path to derfile.");
     println!("-f --file  PATH                                           Use a specified derfile.");
-    println!("-d --debug PATH FINAL_NAME APPLY_PATH [HOSTNAMES]         Use a specified derfile.");
+    // println!("-d --debug PATH FINAL_NAME APPLY_PATH [HOSTNAMES]         Use a specified derfile.");
     println!("-h --help  PATH                                           Show this help message.")
 }
 
@@ -44,7 +45,7 @@ fn parse_args(args: Vec<String>) -> Args {
         match &entry[..] {
             "-h" | "--help" => ret.push(Arg::Help),
             "-f" | "--file" => ret.push(Arg::Derfile(args[i + 1].clone())),
-            "-d" | "--debug" => ret.push(Arg::Debug(args[i + 1..].to_vec())),
+            // "-d" | "--debug" => ret.push(Arg::Debug(args[i + 1..].to_vec())),
             "-a" | "--apply" => ret.push(Arg::Apply),
             _ => (),
         }
@@ -108,28 +109,44 @@ fn run(args: Args) -> Result {
                     derfile = Some(derfile::Derfile::load_derfile(&derfile_default_path?)?);
                 }
 
-                let mut templates = derfile
+                let template_structures: Vec<Template> = derfile
                     .clone()
                     .unwrap()
                     .templates
                     .values()
-                    .map(|t| t.clone().into())
-                    .collect::<Vec<TemplateFile>>();
-                for each_template in templates.iter_mut() {
-                    each_template.apply()?;
+                    .map(Clone::clone)
+                    .collect();
+                let vecs = recursive_build(template_structures)?;
+                for structure in vecs {
+                    match structure {
+                        TemplateStructure::File(mut f) => {
+                            f.apply()?;
+                        }
+                        TemplateStructure::Directory(d) => {
+                            let settings = &d.settings;
+                            let mut path: path::PathBuf = settings.apply_path.clone().into();
+                            path.push(&settings.final_name);
+                            println!("{:?}", path);
+                            if !path.exists() {
+                                fs::create_dir(&path)?;
+                            }
+                        }
+                    }
                 }
             }
             // This is used purely for debugging Template Files.
-            Arg::Debug(parse_args) => {
+            /* Arg::Debug(parse_args) => {
                 let hostnames = parse_args[3..].to_vec();
-                let mut template_config = TemplateFile::new(
-                    parse_args[0].clone(),
-                    parse_args[1].clone(),
-                    parse_args[2].clone(),
-                    hostnames,
+                let mut template_config = TemplateFile::new( 
+                    TemplateSettings::new(
+                        parse_args[0].clone(),
+                        parse_args[1].clone(),
+                        parse_args[2].clone(),
+                        hostnames,
+                    )
                 );
                 template_config.apply()?
-            }
+            } */
             Arg::Help => {
                 help_function();
             }
