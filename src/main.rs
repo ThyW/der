@@ -127,8 +127,9 @@ fn run(args: Args) -> Result {
                             let mut path: path::PathBuf = settings.apply_path.clone().into();
                             path.push(&settings.final_name);
                             println!("{:?}", path);
+                            println!("Im here");
                             if !path.exists() {
-                                fs::create_dir(&path)?;
+                                fs::create_dir_all(&path)?;
                             }
                         }
                     }
@@ -137,7 +138,7 @@ fn run(args: Args) -> Result {
             // This is used purely for debugging Template Files.
             /* Arg::Debug(parse_args) => {
                 let hostnames = parse_args[3..].to_vec();
-                let mut template_config = TemplateFile::new( 
+                let mut template_config = TemplateFile::new(
                     TemplateSettings::new(
                         parse_args[0].clone(),
                         parse_args[1].clone(),

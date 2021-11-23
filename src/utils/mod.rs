@@ -64,11 +64,9 @@ pub fn remove_template_ext<S: AsRef<str>, P: AsRef<Path>>(
 ) -> String {
     let path = haystack.as_ref().to_path_buf();
     // HACK: fix this pls
-    let final_component = path
-        .components()
-        .last()
-        .unwrap();
-    let final_component_string = final_component.clone()
+    let final_component = path.components().last().unwrap();
+    let final_component_string = final_component
+        .clone()
         .as_os_str()
         .to_str()
         .unwrap()
@@ -77,10 +75,10 @@ pub fn remove_template_ext<S: AsRef<str>, P: AsRef<Path>>(
 
     for each in needles {
         if each.as_ref() == ext.clone() {
-            return final_component_string.replace(&format!(".{}", ext), "")
+            return final_component_string.replace(&format!(".{}", ext), "");
         }
     }
-    return final_component_string
+    return final_component_string;
 }
 
 #[cfg(test)]

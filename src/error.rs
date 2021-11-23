@@ -1,5 +1,5 @@
-use std::io;
 use std::env;
+use std::io;
 
 /// Custom wrapper for `Result`.
 pub type Result<T = ()> = std::result::Result<T, Error>;

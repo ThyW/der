@@ -150,7 +150,8 @@ impl Derfile {
                     let variable_split = template
                         .apply_path
                         .split_at(template.apply_path.find(VAR_ADD).unwrap());
-                    let variable_name = variable_split.0.strip_prefix(VAR_PREF).unwrap().to_string();
+                    let variable_name =
+                        variable_split.0.strip_prefix(VAR_PREF).unwrap().to_string();
                     let additional_value = variable_split.1.strip_prefix(VAR_ADD).unwrap();
 
                     if let Some(variable) = self_clone.get_var(&variable_name) {
@@ -195,7 +196,8 @@ impl Derfile {
                 if variable_path_buf.is_absolute() {
                     temp.apply_path = template.apply_path.clone();
                 } else {
-                    let mut canonicalized_apply_path = self.path.clone().parent().unwrap().to_path_buf();
+                    let mut canonicalized_apply_path =
+                        self.path.clone().parent().unwrap().to_path_buf();
                     canonicalized_apply_path.push(template.apply_path.clone());
                     temp.apply_path = normalize_path(&canonicalized_apply_path)
                         .to_str()

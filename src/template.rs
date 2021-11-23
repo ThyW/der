@@ -314,6 +314,9 @@ impl TemplateDirectory {
                 ret.append(&mut dir.parse()?);
                 ret.push(TemplateStructure::Directory(dir));
             } else if metadata.is_file() {
+                cloned_settings
+                    .apply_path
+                    .push_str(&self.settings.final_name);
                 ret.push(TemplateStructure::File(TemplateFile::new(cloned_settings)));
             } else {
                 // FIXME
