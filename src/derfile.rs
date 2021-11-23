@@ -204,7 +204,7 @@ impl Derfile {
                         .unwrap()
                         .to_string();
                     temp.apply_path.push('/');
-                    println!("{:?}", temp.apply_path);
+                    // println!("{:?}", temp.apply_path);
                 }
             }
 
@@ -258,7 +258,7 @@ impl Derfile {
         derfile.vars = self.vars.clone();
         derfile.path = self.path.clone();
 
-        println!("{:#?}", derfile);
+        // println!("{:#?}", derfile);
 
         derfile
     }
@@ -457,7 +457,7 @@ impl Derfile {
                                 let field = split.1.strip_prefix("=").unwrap().trim();
                                 if field.contains(",") {
                                     for split_component in field.split(",") {
-                                        println!("{}", split_component.trim());
+                                        // println!("{}", split_component.trim());
                                         table.add_extension(split_component.trim().to_string())
                                     }
                                 } else {

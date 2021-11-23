@@ -146,7 +146,7 @@ impl TemplateFile {
         }
 
         if open_code_blocks_count == 0 {
-            eprintln!("No code blocks were found in file {}", self.0.path);
+            // eprintln!("No code blocks were found in file {}", self.0.path);
             return Ok(ParsedTemplate(file_lines));
         }
 
@@ -249,7 +249,7 @@ impl TemplateFile {
             self.0.apply_path.push_str(&self.0.final_name)
         }
         let output_path = path::Path::new(&self.0.apply_path);
-        println!("{:#?}", output_path);
+        // println!("{:#?}", output_path);
         if output_path.exists() {
             fs::write(output_path, parsed.0).unwrap();
         } else {
@@ -305,18 +305,17 @@ impl TemplateDirectory {
             }
             cloned_settings.path = path.to_str().unwrap().to_string();
             cloned_settings.final_name =
-                remove_template_ext(&cloned_settings.path, &cloned_settings.extensions);
-            println!("{}", cloned_settings.final_name);
+                remove_template_ext_or_dir(&cloned_settings.path, &cloned_settings.extensions);
+            let mut apply_path_path = path::PathBuf::from(&cloned_settings.apply_path);
+            apply_path_path.push(&self.settings.final_name);
+            cloned_settings.apply_path = apply_path_path.to_str().unwrap().to_string();
 
             if metadata.is_dir() {
                 let dir = TemplateDirectory::new(cloned_settings);
 
+                ret.push(TemplateStructure::Directory(dir.clone()));
                 ret.append(&mut dir.parse()?);
-                ret.push(TemplateStructure::Directory(dir));
             } else if metadata.is_file() {
-                cloned_settings
-                    .apply_path
-                    .push_str(&self.settings.final_name);
                 ret.push(TemplateStructure::File(TemplateFile::new(cloned_settings)));
             } else {
                 // FIXME

@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::env;
-use std::fs;
 use std::path;
 use std::process;
 
@@ -122,32 +121,12 @@ fn run(args: Args) -> Result {
                         TemplateStructure::File(mut f) => {
                             f.apply()?;
                         }
-                        TemplateStructure::Directory(d) => {
-                            let settings = &d.settings;
-                            let mut path: path::PathBuf = settings.apply_path.clone().into();
-                            path.push(&settings.final_name);
-                            println!("{:?}", path);
-                            println!("Im here");
-                            if !path.exists() {
-                                fs::create_dir_all(&path)?;
-                            }
-                        }
+                        // This can probably be removed, since we do directory creations when
+                        // applying tempalte files.
+                        TemplateStructure::Directory(_) => {}
                     }
                 }
             }
-            // This is used purely for debugging Template Files.
-            /* Arg::Debug(parse_args) => {
-                let hostnames = parse_args[3..].to_vec();
-                let mut template_config = TemplateFile::new(
-                    TemplateSettings::new(
-                        parse_args[0].clone(),
-                        parse_args[1].clone(),
-                        parse_args[2].clone(),
-                        hostnames,
-                    )
-                );
-                template_config.apply()?
-            } */
             Arg::Help => {
                 help_function();
             }
