@@ -12,7 +12,7 @@ $ cargo install --path /somewhere/in/your/path
 Maybe also coming to some package managers soon. Who knows? ;)
 
 # Usage
-First we start by defining our `derfile`. In usage, a `derfile` is really similar to a Makefile, however you might find the syntax a bit off-putting as it is basically TOML with some \$ denoted variables and in line shell code...
+First we start by defining our `derfile`. All things considered, a `derfile` is really similar to a Makefile, however you might find the syntax a bit off-putting as it is basically TOML with some \$ denoted variables and in line shell code...
 So let's get stared, shall we?
 
 ## Derfiles
@@ -28,21 +28,46 @@ $shell_code_var = `echo Hello`
 
 # you can get environmental variables like so:
 $env_var = env`VARNAME`
+
+# Appending to variables is also supported.
+# For that we use the : right after the variable name.
+# A few examples
+apply_path = $path:/next/dir/
+hostnames = $hosts:new_host, new_host_2
 ```
 
 ### Templates
 ```
-# templates are defined as follows(example is a config for the Alacritty terminal emulator):
+# Templates are defined as follows(example is a config for the Alacritty terminal emulator):
 
-# name, or in our case path, is relative to our derfile, e.g. the directory we envoke def from
+# Template name is a path (absolute or relative) to the template file.
 [path/to/alacritty.yml.t] 
-# the final name of parsed template, the same as defined above, but with the .t stripped
+# The final name is the name of the created parsed derfile.
+# This can be any string you want.
 final_name = alacritty.yml
-# lists are defined as a list of values separated by commas
+# A list of comma separated values, hostnames, for which this file should be parsed.
 hostnames = machine-one, machine-two, machine-three
-# apply path, in other words, where should our output file be places
-# if the path doesn't exits, der will attepmt to create it!
+# Apply path, in other words, where should our output file be placed.
+# If the path does not exist, der will attepmt to create it!
+# WARNING: This has to be a directory.
 appy_path = /home/some/path/
+
+```
+Templates can also point to whole directories which can contain template files. These templates have a few more options, such as should the files even be attempted to be parsed, extensions to look for within the files and a few more.
+
+```console
+[some/dir]
+final_name = outdir
+apply_path = out/
+hostnames = $hosts
+# A list of comma separated values, file name extensions to look for as template files.
+extensions = t, tmp, template, tpl
+# This is a boolean field so either true or false is required here.
+# If neither true nor false is found, the defaultt is assumed to be false!
+parse_files = true
+# Visit only the first directory, ignoring all subdirectories.
+# Again, a boolean value, either true of false
+recursive = true
 ```
 
 ### Templates with variables
@@ -90,28 +115,20 @@ dotfiles/
 
 We could then have our derfile laid out like so:
 ```
-$hostnames = terminator, cooldesk
-$alacritty_out = ./out/alacritty/.config/alacritty/
-$nvim_out = ./out/nvim/.config/nvim/
-$i3_out = ./out/i3/.config/i3/
-$dunst_out = .out/dunst/.config/dunst/
-$bash_out = ./out/bash/
+$out = out/
 
 [alacritty/alacritty.yml.t]
 final_name = alacritty.yml
 hosntnames = $hostnames
-apply_path = $alacritty_out
+apply_path = $out:alacritty/
 
-[nvim/init.lua.t]
+[nvim/lua]
 final_name = init.lua
 hostnames = $hostnames
-apply_path = $nvim_out
-
-# you can also copy entire folders like so:
-# if no final_name field is provided, we use the same name
-# if no hostnames filed is provided, we apply to all
-[nvim/lua]
-apply_path = $nvim_out
+apply_path = $out:nvim
+extensions = t
+parse_files = false
+recursive = true
 
 [i3/config.t]
 final_name = config
