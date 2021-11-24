@@ -2,6 +2,7 @@ use std::fs;
 use std::path::{Component, Path, PathBuf};
 
 use crate::error::*;
+use crate::DEBUG;
 
 /// Normalize a path without resovling symlinks and without need the path to exist! Found in
 /// `cargo` [source code](https://github.com/rust-lang/cargo/blob/fede83ccf973457de319ba6fa0e36ead454d2e20/src/cargo/util/paths.rs#L61)
@@ -84,6 +85,10 @@ pub fn remove_template_ext_or_dir<S: AsRef<str>, P: AsRef<Path>>(
         }
     }
     return final_component_string;
+}
+
+pub fn debug() -> bool {
+    return DEBUG.with(|v| v.borrow().clone())
 }
 
 #[cfg(test)]

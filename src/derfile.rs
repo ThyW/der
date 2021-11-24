@@ -25,7 +25,7 @@ pub struct Template {
     pub parse_files: bool,
     pub extensions: Vec<String>,
     pub recursive: bool,
-    pub keep_structure: bool,
+    // pub keep_structure: bool,
 }
 
 /// Representation of a single variable in a derfile.
@@ -71,9 +71,9 @@ impl Template {
         self.parse_files = arg
     }
 
-    pub fn set_keep_structure(&mut self, arg: bool) {
+    /* pub fn set_keep_structure(&mut self, arg: bool) {
         self.keep_structure = arg
-    }
+    } */
 
     pub fn add_extension(&mut self, ext: String) {
         self.extensions.push(ext)
@@ -105,12 +105,12 @@ impl Derfile {
 
     // TODO: Add support for variable concatenation and directory parsing
     pub fn parse(self) -> Self {
-        let mut derfile: Derfile = Default::default();
+        let mut new_derfile: Derfile = Default::default();
         let mut self_clone = self.clone();
         for (template_name, template) in self.templates.iter() {
-            derfile.add_template(template_name.clone());
-            let mut temp = derfile.get_template(&template_name).unwrap();
-            temp.name = template_name.to_string();
+            new_derfile.add_template(template_name.clone());
+            let mut new_template = new_derfile.get_template(&template_name).unwrap();
+            new_template.name = template_name.to_string();
             if template.final_name.starts_with(VAR_PREF) {
                 if template.final_name.contains(VAR_ADD) {
                     // First, we split by VAR_ADD. On one side we get var $varname and on the other
@@ -125,9 +125,9 @@ impl Derfile {
                     // Then after we retrieve the value of the variable, we can then add to its
                     // the additional value. We do this for all variables except the boolean ones.
                     if let Some(variable) = self_clone.get_var(&variable_name) {
-                        let mut temp = derfile.get_template(&template.name).unwrap();
-                        variable.value[0].push_str(additional_value);
-                        temp.final_name = variable.value[0].clone();
+                        let mut value = variable.value[0].clone();
+                        value.push_str(additional_value);
+                        new_template.final_name = value;
                     }
                 } else {
                     let variable_name = template
@@ -137,13 +137,11 @@ impl Derfile {
                         .to_string();
 
                     if let Some(variable) = self_clone.get_var(&variable_name) {
-                        let mut temp = derfile.get_template(&template.name).unwrap();
-                        temp.final_name = variable.value[0].clone(); // only take the fist value, sicne we only accept one final file name
+                        new_template.final_name = variable.value[0].clone(); // only take the fist value, sicne we only accept one final file name
                     }
                 }
             } else {
-                let mut temp = derfile.get_template(&template_name).unwrap();
-                temp.final_name = template.final_name.clone();
+                new_template.final_name = template.final_name.clone();
             }
             if template.apply_path.starts_with(VAR_PREF) {
                 if template.apply_path.contains(VAR_ADD) {
@@ -155,17 +153,17 @@ impl Derfile {
                     let additional_value = variable_split.1.strip_prefix(VAR_ADD).unwrap();
 
                     if let Some(variable) = self_clone.get_var(&variable_name) {
-                        let mut temp = derfile.get_template(&template.name).unwrap();
                         // here we add the additional value
-                        variable.value[0].push_str(additional_value);
-                        let variable_path_buf = path::PathBuf::from(&variable.value[0]);
+                        let mut value = variable.value[0].clone();
+                        value.push_str(additional_value);
+                        let variable_path_buf = path::PathBuf::from(&value);
                         if variable_path_buf.is_absolute() {
-                            temp.apply_path = variable.value[0].clone(); // only take the first value, since we only accpet one apply path now
+                            new_template.apply_path = value; // only take the first value, since we only accpet one apply path now
                         } else {
                             let mut canonicalized_apply_path =
                                 self.path.clone().parent().unwrap().to_path_buf();
-                            canonicalized_apply_path.push(variable.value[0].clone());
-                            temp.apply_path =
+                            canonicalized_apply_path.push(value);
+                            new_template.apply_path =
                                 canonicalized_apply_path.to_str().unwrap().to_string();
                         }
                     }
@@ -177,34 +175,31 @@ impl Derfile {
                         .to_string();
 
                     if let Some(variable) = self_clone.get_var(&variable_name) {
-                        let mut temp = derfile.get_template(&template.name).unwrap();
                         let variable_path_buf = path::PathBuf::from(&variable.value[0]);
                         if variable_path_buf.is_absolute() {
-                            temp.apply_path = variable.value[0].clone(); // only take the first value, since we only accpet one apply path now
+                            new_template.apply_path = variable.value[0].clone(); // only take the first value, since we only accpet one apply path now
                         } else {
                             let mut canonicalized_apply_path =
                                 self.path.clone().parent().unwrap().to_path_buf();
                             canonicalized_apply_path.push(variable.value[0].clone());
-                            temp.apply_path =
+                            new_template.apply_path =
                                 canonicalized_apply_path.to_str().unwrap().to_string();
                         }
                     }
                 }
             } else {
-                let mut temp = derfile.get_template(&template_name).unwrap();
                 let variable_path_buf = path::PathBuf::from(&template.apply_path);
                 if variable_path_buf.is_absolute() {
-                    temp.apply_path = template.apply_path.clone();
+                    new_template.apply_path = template.apply_path.clone();
                 } else {
                     let mut canonicalized_apply_path =
                         self.path.clone().parent().unwrap().to_path_buf();
                     canonicalized_apply_path.push(template.apply_path.clone());
-                    temp.apply_path = normalize_path(&canonicalized_apply_path)
+                    new_template.apply_path = normalize_path(&canonicalized_apply_path)
                         .to_str()
                         .unwrap()
                         .to_string();
-                    temp.apply_path.push('/');
-                    // println!("{:?}", temp.apply_path);
+                    new_template.apply_path.push('/');
                 }
             }
 
@@ -222,8 +217,7 @@ impl Derfile {
                 }
             }
 
-            let mut t = derfile.get_template(&template.name).unwrap();
-            t.hostnames = hostname_clone;
+            new_template.hostnames = hostname_clone;
 
             let mut extensions_clone: Vec<String> = Vec::new();
             for extension in template.extensions.iter() {
@@ -249,18 +243,19 @@ impl Derfile {
                     extensions_clone.push(extension.to_string())
                 }
             }
-            t.extensions = extensions_clone;
+            new_template.extensions = extensions_clone;
             let cloned = self_clone.get_template(&template_name).unwrap();
-            t.recursive = cloned.recursive;
-            t.parse_files = cloned.parse_files;
-            t.keep_structure = cloned.keep_structure;
+            new_template.recursive = cloned.recursive;
+            new_template.parse_files = cloned.parse_files;
+            // t.keep_structure = cloned.keep_structure;
+            println!("{:#?}", new_template);
         }
-        derfile.vars = self.vars.clone();
-        derfile.path = self.path.clone();
+        new_derfile.vars = self.vars.clone();
+        new_derfile.path = self.path.clone();
 
-        // println!("{:#?}", derfile);
+        if debug() {println!("{:#?}", new_derfile)};
 
-        derfile
+        new_derfile
     }
 
     // TODO:
@@ -441,7 +436,7 @@ impl Derfile {
                                 }
                             }
                         }
-                        "keep_structure" => {
+                        /* "keep_structure" => {
                             if let Some(table) = derfile.get_template(&template_name) {
                                 let field = split.1.strip_prefix("=").unwrap().trim();
                                 if field == "true" {
@@ -450,7 +445,7 @@ impl Derfile {
                                     table.set_keep_structure(false)
                                 }
                             }
-                        }
+                        } */
 
                         "extensions" => {
                             if let Some(table) = derfile.get_template(&template_name) {

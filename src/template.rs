@@ -45,8 +45,8 @@ pub struct TemplateSettings {
     pub extensions: Vec<String>,
     /// Should parse files recursively in all its subdirectories?
     pub recursive: bool,
-    /// Input directory structure will be same as output directory structure.
-    pub keep_structure: bool,
+    /* /// Input directory structure will be same as output directory structure.
+    pub keep_structure: bool, */
 }
 
 /// A template strucutre is either a template file or a template directory, which can then hold
@@ -111,10 +111,11 @@ impl TemplateFile {
         let mut ret = String::new();
         let hostname = env::var("HOSTNAME")?;
         if !self.0.hostnames.contains(&hostname) {
-            eprintln!(
-                "Warning: $HOSTNAME not in hostnames for template file: {}",
-                self.0.path
-            )
+            if debug() {
+                eprintln!(
+                    "[WARN] $HOSTNAME not in hostnames for template file: {}",
+                    self.0.path)
+            }
         }
         if !path::Path::new(&self.0.path).exists() {
             return Err("Error parsing template file: File does not exist1".into());
@@ -146,7 +147,9 @@ impl TemplateFile {
         }
 
         if open_code_blocks_count == 0 {
-            // eprintln!("No code blocks were found in file {}", self.0.path);
+            if debug() {
+                eprintln!("[WARN] No code blocks were found in file {}", self.0.path);
+            }
             return Ok(ParsedTemplate(file_lines));
         }
 
@@ -249,7 +252,9 @@ impl TemplateFile {
             self.0.apply_path.push_str(&self.0.final_name)
         }
         let output_path = path::Path::new(&self.0.apply_path);
-        // println!("{:#?}", output_path);
+        if debug() {
+            println!("[INFO] Outputting to: {:#?}", output_path);
+        }
         if output_path.exists() {
             fs::write(output_path, parsed.0).unwrap();
         } else {
@@ -281,7 +286,7 @@ impl From<derfile::Template> for TemplateSettings {
             extensions: other.extensions.clone(),
             parse_files: other.parse_files,
             recursive: other.recursive.clone(),
-            keep_structure: other.keep_structure.clone(),
+            // keep_structure: other.keep_structure.clone(),
         };
     }
 }
@@ -311,10 +316,14 @@ impl TemplateDirectory {
             cloned_settings.apply_path = apply_path_path.to_str().unwrap().to_string();
 
             if metadata.is_dir() {
-                let dir = TemplateDirectory::new(cloned_settings);
+                if !cloned_settings.recursive {
+                    continue;
+                } else {
+                    let dir = TemplateDirectory::new(cloned_settings);
 
-                ret.push(TemplateStructure::Directory(dir.clone()));
-                ret.append(&mut dir.parse()?);
+                    ret.push(TemplateStructure::Directory(dir.clone()));
+                    ret.append(&mut dir.parse()?);
+                }
             } else if metadata.is_file() {
                 ret.push(TemplateStructure::File(TemplateFile::new(cloned_settings)));
             } else {
@@ -328,7 +337,6 @@ impl TemplateDirectory {
     }
 }
 
-// TODO: FIX Template directories
 pub fn recursive_build(input: Vec<derfile::Template>) -> Result<TemplateStructures> {
     let mut ret: TemplateStructures = Vec::new();
     for template in input.into_iter() {

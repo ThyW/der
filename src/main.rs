@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::env;
 use std::path;
 use std::process;
+use std::cell::RefCell;
 
 mod derfile;
 mod error;
@@ -12,6 +13,9 @@ use derfile::*;
 use error::*;
 use template::*;
 
+// Global variable for debugging
+thread_local! {static DEBUG: RefCell<bool> = RefCell::new(false)}
+
 /// Wrapper type for a list of parsed command line arguments
 type Args = Vec<Arg>;
 
@@ -21,6 +25,7 @@ enum Arg {
     Derfile(String),
     // Debug(Vec<String>),
     Apply,
+    Print
 }
 
 /// Help fucntion to be diplayed when the `-h` or `--help` flags are passed
@@ -31,7 +36,8 @@ fn help_function() {
     println!("-a --apply PATH                                           Apply using  specified path to derfile.");
     println!("-f --file  PATH                                           Use a specified derfile.");
     // println!("-d --debug PATH FINAL_NAME APPLY_PATH [HOSTNAMES]         Use a specified derfile.");
-    println!("-h --help  PATH                                           Show this help message.")
+    println!("-h --help  PATH                                           Show this help message.");
+    println!("-p --print                                                Print status messages and debug info.")
 }
 
 /// Pasre command line arguments
@@ -46,6 +52,7 @@ fn parse_args(args: Vec<String>) -> Args {
             "-f" | "--file" => ret.push(Arg::Derfile(args[i + 1].clone())),
             // "-d" | "--debug" => ret.push(Arg::Debug(args[i + 1..].to_vec())),
             "-a" | "--apply" => ret.push(Arg::Apply),
+            "-p" | "--print" => ret.push(Arg::Print),
             _ => (),
         }
     }
@@ -92,7 +99,7 @@ fn run(args: Args) -> Result {
             Arg::Derfile(file) => {
                 // Get an absolute path to derfile.
                 derfile = Some(derfile::Derfile::load_derfile(
-                    &path::Path::new(&file).canonicalize().unwrap(),
+                    &path::Path::new(&file).canonicalize()?
                 )?);
             }
 
@@ -127,6 +134,9 @@ fn run(args: Args) -> Result {
                     }
                 }
             }
+            Arg::Print => {
+                DEBUG.with(|v| *v.borrow_mut() = true);
+            }
             Arg::Help => {
                 help_function();
             }
@@ -142,7 +152,9 @@ fn main() -> Result {
 
     run(parsed_args)?;
 
-    println!("Success");
+    if DEBUG.with(|v| {
+        *v.borrow()
+    }) { println!("Success!")}
 
     Ok(())
 }

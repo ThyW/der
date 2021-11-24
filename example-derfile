@@ -32,5 +32,3 @@ parse_files = true, false
 extensions = t, template, tmp, temp, tpl
 # go through all subdirectories and look for 
 recursive = true, false
-# keep the file structure, e.g. output directory will look the same as input directory
-keep_structure = true, false
