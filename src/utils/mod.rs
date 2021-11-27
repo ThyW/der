@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::{Component, Path, PathBuf};
+use std::process::Command;
 
 use crate::error::*;
 use crate::DEBUG;
@@ -85,6 +86,15 @@ pub fn remove_template_ext_or_dir<S: AsRef<str>, P: AsRef<Path>>(
         }
     }
     return final_component_string;
+}
+
+pub fn get_hostname() -> Result<String> {
+    let command = Command::new("hostname")
+        .output()?
+        .stdout;
+    let return_string = String::from_utf8(command)?;
+
+    Ok(return_string)
 }
 
 pub fn debug() -> bool {

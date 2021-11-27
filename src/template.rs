@@ -1,7 +1,6 @@
 use crate::derfile;
 use crate::error::*;
 use crate::utils::*;
-use std::env;
 use std::fs;
 use std::path;
 
@@ -109,7 +108,7 @@ impl TemplateFile {
 
         // Basic stuff.
         let mut ret = String::new();
-        let hostname = env::var("HOSTNAME")?;
+        let hostname = get_hostname()?;
         if !self.0.hostnames.contains(&hostname) {
             if debug() {
                 eprintln!(

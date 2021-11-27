@@ -1,5 +1,6 @@
 use std::env;
 use std::io;
+use std::string;
 
 /// Custom wrapper for `Result`.
 pub type Result<T = ()> = std::result::Result<T, Error>;
@@ -9,6 +10,7 @@ pub type Result<T = ()> = std::result::Result<T, Error>;
 pub enum Error {
     Io(io::Error),
     EnvVar(env::VarError),
+    Utf8Conversion(string::FromUtf8Error),
     Custom(&'static str),
 }
 
@@ -27,5 +29,11 @@ impl From<env::VarError> for Error {
 impl From<&'static str> for Error {
     fn from(other: &'static str) -> Self {
         Self::Custom(other)
+    }
+}
+
+impl From<string::FromUtf8Error> for Error {
+    fn from(other: string::FromUtf8Error) -> Self {
+        Self::Utf8Conversion(other)
     }
 }
