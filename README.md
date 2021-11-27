@@ -34,6 +34,8 @@ $env_var = env`VARNAME`
 # A few examples
 apply_path = $path:/next/dir/
 hostnames = $hosts:new_host, new_host_2
+
+# However, this does not change the variable only uses, its value and adds to it.
 ```
 
 ### Templates
@@ -122,23 +124,30 @@ final_name = alacritty.yml
 hosntnames = $hostnames
 apply_path = $out:alacritty/
 
-[nvim/lua]
-final_name = init.lua
+[nvim]
+final_name = nvim
 hostnames = $hostnames
-apply_path = $out:nvim
-extensions = t
+apply_path = $out
 parse_files = false
+extensions = t, tpl
 recursive = true
 
 [i3/config.t]
 final_name = config
 hostnames = $hostnames
-apply_path = $i3_out
+apply_path = $out:i3/
+
+[i3status-rust/config.toml]
+final_name = config.toml
+hostnames = $hostnames
+apply_path = $out:i3status-rust/
 
 [dunst/dunstrc.t]
 final_name = dunstrc
 honstames = $hostnames
-apply_path = $dunst_out
+apply_path = $out:dunst
+
+$bash_out = $out:bash/
 
 [bash/bashrc.t]
 final_name = .bashrc
@@ -157,7 +166,7 @@ Then, if we run the script from `dotfiles/`, we should have all templates applie
 Template files are really just your config file, with parts added for `der` to distinguish, which parts should be put on which machine.
 
 ### Syntax
-Template files consist of normal text(parts of your configuration files, that you want to have on all the different machines) and so called `code blocks`. Code blocks are parts of the file which get included or excluded from the file, depending on the machine, or, the hostname for that fact. Code blocks look like this:
+Template files are made up of normal text(parts of your configuration files, that you want to have on all the different machines) and so called `code blocks`. Code blocks are parts of the file which get included or excluded from the file, depending on the machine, or the hostname for that fact. Code blocks look like this:
 
 ```
 # Code blocks are declared by so, two @ followed by a list of comma separated values.
@@ -184,4 +193,4 @@ exec --no-startup-id xrandr --output eDP-1 --off && xrandr --output HDMI-1 --pri
 This solves the issue! If I clone my dotfiles, `der` them and check the output on both machines, on my home laptop I will be able to see the line which I wanted to have there and on the work laptop, the entire code block would be excluded.
 
 # Contributing
-Open an issue, or, if you feel like it, submit a PR.
+Open an issue, or submit a PR if you feel like it.
