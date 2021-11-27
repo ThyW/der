@@ -4,7 +4,6 @@ use std::fs;
 use std::path;
 
 use crate::error::*;
-use crate::execute_code;
 use crate::utils::*;
 
 /// Symbols for derfile parsing, these can be changed before compilation.
@@ -12,40 +11,51 @@ pub const TEMPLATE_LEFT: &str = "[";
 pub const TEMPLATE_RIGHT: &str = "]";
 pub const CODE_SEP: &str = "`";
 pub const VAR_PREF: &str = "$";
-pub const VAR_ADD: &str = ":"; // code separator for adding other values
+pub const VAR_ADD: &str = ":"; // variable separator for adding values to a variable
 pub const CODE_KEYWORDS: [&str; 1] = ["env"];
 
-/// Representation of a single template secition in a derfile.
+/// A template section of a derfile.
 #[derive(Debug, Clone, Default)]
 pub struct Template {
+    /// Templates name, or in this case its path.
     pub name: String,
+    /// Name of the output file.
     pub final_name: String,
+    /// A list of hostnames, for which this template should be parsed.
     pub hostnames: Vec<String>,
+    /// A path to the directory in which the parsed file should be placed.
     pub apply_path: String,
+    /// [Dirctory only fields]
+    /// Whether all template files found in this directory and its subdirectories should be parsed.
     pub parse_files: bool,
+    /// Extensions to look for when searching a directory for template files.
     pub extensions: Vec<String>,
+    /// If this flag is true, a recursive search the directory and all its child directories will
+    /// be performed. If false, only the directory will be visited, all its subdirectories
+    /// ignored.
     pub recursive: bool,
-    // pub keep_structure: bool,
 }
 
-/// Representation of a single variable in a derfile.
+/// A single derfile variable.
 #[derive(Debug, Clone, Default)]
 pub struct Variable {
     pub _name: String,
+    /// Value[s] of the variable.
     pub value: Vec<String>,
 }
 
 /// Representation of a derfile.
-/// `templates`: HashMap of templates and their names.
-/// `vars`: HashMap of variables and their names.
-/// `path`: Absolute path to a derfile.
 #[derive(Debug, Clone, Default)]
 pub struct Derfile {
+    /// Key value pairs of tempale names(their paths) and templates.
     pub templates: HashMap<String, Template>,
+    /// Key value pairs of variable names and their values.
     pub vars: HashMap<String, Variable>,
+    /// Absolute path to derfile.
     path: path::PathBuf,
 }
 
+/// Just some setters for working with templates.
 impl Template {
     pub fn set_name(&mut self, name: String) {
         self.name = name
@@ -71,46 +81,55 @@ impl Template {
         self.parse_files = arg
     }
 
-    /* pub fn set_keep_structure(&mut self, arg: bool) {
-        self.keep_structure = arg
-    } */
-
     pub fn add_extension(&mut self, ext: String) {
         self.extensions.push(ext)
     }
 }
 
 impl Variable {
+    /// Construct a new variable.
     fn new(_name: String, value: Vec<String>) -> Self {
         Self { _name, value }
     }
 }
 
 impl Derfile {
+    /// Add a new empty template, give its name(path).
     pub fn add_template(&mut self, name: String) {
         self.templates.insert(name, Default::default());
     }
 
-    pub fn get_template(&mut self, name: &String) -> Option<&mut Template> {
-        self.templates.get_mut(name)
+    /// Get a mutable reference to a template if we have its name.
+    pub fn get_template<S: AsRef<str>>(&mut self, name: &S) -> Option<&mut Template> {
+        self.templates.get_mut(name.as_ref())
     }
 
+    /// Create a new varialbe.
     pub fn add_var(&mut self, name: String, value: Vec<String>) {
         self.vars.insert(name.clone(), Variable::new(name, value));
     }
 
-    pub fn get_var(&mut self, name: &String) -> Option<&mut Variable> {
-        self.vars.get_mut(name)
+    pub fn get_var<S: AsRef<str>>(&mut self, name: &S) -> Option<&mut Variable> {
+        self.vars.get_mut(name.as_ref())
     }
 
-    // TODO: Add support for variable concatenation and directory parsing
+    /// Parse a template file, which has already been loaded.
     pub fn parse(self) -> Self {
+        // Create a new output derfile into which we will parse our current defile.
         let mut new_derfile: Derfile = Default::default();
+        // We create a clone of self for a simpler data manipulation.
         let mut self_clone = self.clone();
         for (template_name, template) in self.templates.iter() {
+            // For each template in our current derfile, we create a new temlate field in the new
+            // derfile.
             new_derfile.add_template(template_name.clone());
+
+            // Then we get a mutable reference to the new template so we can parse and isert data
+            // into it.
             let mut new_template = new_derfile.get_template(&template_name).unwrap();
             new_template.name = template_name.to_string();
+
+            // Then we check through all fields, parse them and add them to the new defile.
             if template.final_name.starts_with(VAR_PREF) {
                 if template.final_name.contains(VAR_ADD) {
                     // First, we split by VAR_ADD. On one side we get var $varname and on the other
@@ -137,28 +156,32 @@ impl Derfile {
                         .to_string();
 
                     if let Some(variable) = self_clone.get_var(&variable_name) {
-                        new_template.final_name = variable.value[0].clone(); // only take the fist value, sicne we only accept one final file name
+                        new_template.final_name = variable.value[0].clone(); // only take the fist value, since we only accept one final file name
                     }
                 }
             } else {
                 new_template.final_name = template.final_name.clone();
             }
+
+            // This is probably the ugliest part of this function, since we have to do a lot of path manipulation
+            // magic here.
             if template.apply_path.starts_with(VAR_PREF) {
                 if template.apply_path.contains(VAR_ADD) {
+                    // Split the variable, to get its name and the value we want to add.
                     let variable_split = template
                         .apply_path
-                        .split_at(template.apply_path.find(VAR_ADD).unwrap());
+                        .split_at(template.apply_path.find(VAR_ADD).unwrap()); // unwrap is ok, since we know that VAR_ADD is present.
                     let variable_name =
-                        variable_split.0.strip_prefix(VAR_PREF).unwrap().to_string();
-                    let additional_value = variable_split.1.strip_prefix(VAR_ADD).unwrap();
+                        variable_split.0.strip_prefix(VAR_PREF).unwrap().to_string(); // same here.
+                    let additional_value = variable_split.1.strip_prefix(VAR_ADD).unwrap(); // and  here.
 
                     if let Some(variable) = self_clone.get_var(&variable_name) {
                         // here we add the additional value
-                        let mut value = variable.value[0].clone();
+                        let mut value = variable.value[0].clone(); // here we clone, because we don't want to add the value to the variable permanently
                         value.push_str(additional_value);
                         let variable_path_buf = path::PathBuf::from(&value);
                         if variable_path_buf.is_absolute() {
-                            new_template.apply_path = value; // only take the first value, since we only accpet one apply path now
+                            new_template.apply_path = value;
                         } else {
                             let mut canonicalized_apply_path =
                                 self.path.clone().parent().unwrap().to_path_buf();
@@ -177,7 +200,8 @@ impl Derfile {
                     if let Some(variable) = self_clone.get_var(&variable_name) {
                         let variable_path_buf = path::PathBuf::from(&variable.value[0]);
                         if variable_path_buf.is_absolute() {
-                            new_template.apply_path = variable.value[0].clone(); // only take the first value, since we only accpet one apply path now
+                            new_template.apply_path = variable.value[0].clone();
+                        // only take the first value, since we only accpet one apply path now
                         } else {
                             let mut canonicalized_apply_path =
                                 self.path.clone().parent().unwrap().to_path_buf();
@@ -253,16 +277,14 @@ impl Derfile {
         new_derfile.vars = self.vars.clone();
         new_derfile.path = self.path.clone();
 
-        if debug() {println!("{:#?}", new_derfile)};
+        if debug() {
+            println!("{:#?}", new_derfile)
+        };
 
         new_derfile
     }
 
-    // TODO:
-    //  [x] templates
-    //  [x] variables
-    //  [x] variable from code execution?
-    //  [ ] find out what's wrong with it, it for example can't access environmental variables
+    /// Load a derfile from disk.
     pub fn load_derfile(path: &path::Path) -> Result<Self> {
         let buffer = fs::read_to_string(path)?;
         let mut derfile: Derfile = Default::default();
@@ -286,7 +308,6 @@ impl Derfile {
             .map(|each| return each.1.to_string())
             .collect();
 
-        // TODO
         // [x] variables from shell code
         // [x] stuff such as "echo $PATH" does not work
         // E.i. instead of returning the value
@@ -446,7 +467,6 @@ impl Derfile {
                                 }
                             }
                         } */
-
                         "extensions" => {
                             if let Some(table) = derfile.get_template(&template_name) {
                                 let field = split.1.strip_prefix("=").unwrap().trim();

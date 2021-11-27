@@ -1,8 +1,6 @@
-use std::collections::HashMap;
+use std::cell::RefCell;
 use std::env;
 use std::path;
-use std::process;
-use std::cell::RefCell;
 
 mod derfile;
 mod error;
@@ -16,81 +14,53 @@ use template::*;
 // Global variable for debugging
 thread_local! {static DEBUG: RefCell<bool> = RefCell::new(false)}
 
-/// Wrapper type for a list of parsed command line arguments
+/// Wrapper type for a list of parsed command line arguments.
 type Args = Vec<Arg>;
 
-/// Representation of command line arguments
+/// All possible command line arguments.
 enum Arg {
     Help,
     Derfile(String),
-    // Debug(Vec<String>),
     Apply,
     Print
 }
 
-/// Help fucntion to be diplayed when the `-h` or `--help` flags are passed
+/// Help fucntion to be diplayed when the `-h` or `--help` flags are passed.
 fn help_function() {
     println!("der v0.1");
     println!("author: J. Kapko <kamo.bavmesa@gmail.com>");
     println!("about: der is a tool for qucik multisystem application of dotfiles, with template supporting.\n");
     println!("-a --apply PATH                                           Apply using  specified path to derfile.");
     println!("-f --file  PATH                                           Use a specified derfile.");
-    // println!("-d --debug PATH FINAL_NAME APPLY_PATH [HOSTNAMES]         Use a specified derfile.");
     println!("-h --help  PATH                                           Show this help message.");
     println!("-p --print                                                Print status messages and debug info.")
 }
 
-/// Pasre command line arguments
+/// Get a list of passed in command line arguments.
 fn parse_args(args: Vec<String>) -> Args {
     // return vector of Args
     let mut ret = Vec::new();
 
-    // go through command line arguments and parse them accordingly
+    // go through command line arguments and add them to return vector
     for (i, entry) in args.iter().enumerate() {
         match &entry[..] {
             "-h" | "--help" => ret.push(Arg::Help),
             "-f" | "--file" => ret.push(Arg::Derfile(args[i + 1].clone())),
-            // "-d" | "--debug" => ret.push(Arg::Debug(args[i + 1..].to_vec())),
             "-a" | "--apply" => ret.push(Arg::Apply),
             "-p" | "--print" => ret.push(Arg::Print),
             _ => (),
         }
     }
 
+    // print out help, if no other argument is passed
+    if ret.is_empty() {
+        ret.push(Arg::Help)
+    }
+
     ret
 }
 
-/// Attempt to execute shell code
-fn execute_code(command: String) -> Result<String> {
-    // Get a list of all environmental args.
-    let vars: HashMap<String, String> = env::vars().collect();
-    // Split the command into its components.
-    if command.contains(" ") {
-        let split: Vec<&str> = command.split(" ").collect();
-        let cmd = split[0];
-        let args = &split[1..];
-
-        let output = process::Command::new(cmd).args(args).envs(&vars).output()?;
-
-        let str = std::str::from_utf8(&output.stdout);
-        let str = str.expect(&format!(
-            "ERROR: Unable to convert command output to string! [Error value: {}]",
-            &command
-        ));
-        return Ok(str.trim().to_string());
-    } else {
-        let output = process::Command::new(&command).envs(&vars).output()?;
-
-        let str = std::str::from_utf8(&output.stdout);
-        let str = str.expect(&format!(
-            "ERROR: Unable to convert command output to string! [Error value: {}]",
-            &command
-        ));
-        return Ok(str.trim().to_string());
-    }
-}
-
-/// Parse arguments and run the application
+/// Parse arguments and run the application.
 fn run(args: Args) -> Result {
     let mut derfile: Option<Derfile> = None;
     for arg in args {
@@ -128,9 +98,7 @@ fn run(args: Args) -> Result {
                         TemplateStructure::File(mut f) => {
                             f.apply()?;
                         }
-                        // This can probably be removed, since we do directory creations when
-                        // applying tempalte files.
-                        TemplateStructure::Directory(_) => {}
+                        _ => {}
                     }
                 }
             }

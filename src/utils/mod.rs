@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use std::env;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::process::Command;
@@ -99,6 +101,35 @@ pub fn get_hostname() -> Result<String> {
 
 pub fn debug() -> bool {
     return DEBUG.with(|v| v.borrow().clone())
+}
+
+pub fn execute_code(command: String) -> Result<String> {
+    // Get a list of all environmental args.
+    let vars: HashMap<String, String> = env::vars().collect();
+    // Split the command into its components.
+    if command.contains(" ") {
+        let split: Vec<&str> = command.split(" ").collect();
+        let cmd = split[0];
+        let args = &split[1..];
+
+        let output = Command::new(cmd).args(args).envs(&vars).output()?;
+
+        let str = std::str::from_utf8(&output.stdout);
+        let str = str.expect(&format!(
+            "ERROR: Unable to convert command output to string! [Error value: {}]",
+            &command
+        ));
+        return Ok(str.trim().to_string());
+    } else {
+        let output = Command::new(&command).envs(&vars).output()?;
+
+        let str = std::str::from_utf8(&output.stdout);
+        let str = str.expect(&format!(
+            "ERROR: Unable to convert command output to string! [Error value: {}]",
+            &command
+        ));
+        return Ok(str.trim().to_string());
+    }
 }
 
 #[cfg(test)]
