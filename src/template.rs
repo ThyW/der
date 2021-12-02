@@ -25,7 +25,7 @@ pub type TemplateStructures = Vec<TemplateStructure>;
 
 /// Information needed for parsing a template file.
 #[derive(Debug, Clone)]
-pub struct TemplateFile(TemplateSettings);
+pub struct TemplateFile(TemplateSettings, Option<String>);
 
 /// Information need for parsing either a template file or a template directory.
 #[derive(Debug, Clone)]
@@ -93,12 +93,26 @@ pub struct ParsedTemplate(String);
 
 impl TemplateFile {
     /// Create a new instance of a `TemplateFile`.
-    pub fn new(ts: TemplateSettings) -> Self {
-        Self(ts)
+    pub fn new(ts: TemplateSettings, s: Option<String>) -> Self {
+        Self(ts, s)
+    }
+
+    pub fn read(&mut self) -> Result {
+        // this for some reason is pretty weird.
+        let result = fs::read_to_string(&self.0.path);
+
+        if let Err(read_error) = result {
+            eprintln!("[WARN] Template file: {:?} could not be read read. This error was returned", read_error);
+            return Err(Error::Io(read_error))
+        } else {
+            let contents = result.unwrap();
+            self.1 = Some(contents);
+            return Ok(())
+        }
     }
 
     /// Parsed a template file and output a `ParsedTemplate` struct.
-    pub fn parse(&self) -> Result<ParsedTemplate> {
+    pub fn parse(&mut self) -> Result<ParsedTemplate> {
         // [x] make sure the file even exists
         // [x] make sure there is an equal number of opening and closing template code symbols
         // [x] maybe make the actuall parsing more pretty, maybe even implement it just by removing
@@ -108,7 +122,7 @@ impl TemplateFile {
 
         // Basic stuff.
         let mut ret = String::new();
-        let hostname = get_hostname()?;
+        let hostname = execute_code("hostname".to_string())?;
         if !self.0.hostnames.contains(&hostname) {
             if debug() {
                 eprintln!(
@@ -119,9 +133,15 @@ impl TemplateFile {
         if !path::Path::new(&self.0.path).exists() {
             return Err("Error parsing template file: File does not exist1".into());
         }
+        let file_lines: String;
 
-        let file_lines = fs::read_to_string(&self.0.path)
-            .expect(&format!("Error: Failed to read tempalte {}", &self.0.path).to_string());
+        // this magic to enable testing
+        if let Some(fls) = &self.1 {
+            file_lines = fls.to_string();
+        } else {
+            self.read()?;
+            file_lines = self.1.as_ref().unwrap().to_string()
+        }
 
         // Find all template code blocks.
         let mut code_block_lines: Vec<(usize, String)> = Vec::new();
@@ -200,7 +220,7 @@ impl TemplateFile {
             let (start_line, start, end_line, end, hostnames) = each;
 
             if hostnames.contains(&hostname) {
-                good_codeblock = true
+                good_codeblock = true;
             }
 
             if good_codeblock {
@@ -268,7 +288,7 @@ impl TemplateFile {
 impl From<derfile::Template> for TemplateStructure {
     fn from(other: derfile::Template) -> Self {
         if !path::Path::new(&other.name).is_dir() {
-            return Self::File(TemplateFile::new(other.into()));
+            return Self::File(TemplateFile::new(other.into(), None));
         } else {
             return Self::Directory(TemplateDirectory::new(other.into()));
         }
@@ -324,7 +344,7 @@ impl TemplateDirectory {
                     ret.append(&mut dir.parse()?);
                 }
             } else if metadata.is_file() {
-                ret.push(TemplateStructure::File(TemplateFile::new(cloned_settings)));
+                ret.push(TemplateStructure::File(TemplateFile::new(cloned_settings, None)));
             } else {
                 // FIXME
                 // symlinks and other stuff is skipped too
@@ -347,7 +367,7 @@ pub fn recursive_build(input: Vec<derfile::Template>) -> Result<TemplateStructur
             ret.append(&mut dir.parse()?)
         } else if path::Path::new(&template.name).is_file() {
             let settings: TemplateSettings = template.into();
-            let file: TemplateFile = TemplateFile::new(settings);
+            let file: TemplateFile = TemplateFile::new(settings, None);
 
             ret.push(TemplateStructure::File(file));
         }
@@ -359,4 +379,40 @@ pub fn recursive_build(input: Vec<derfile::Template>) -> Result<TemplateStructur
     }
 
     Ok(ret)
+}
+
+#[cfg(test)]
+mod test {
+    use super::derfile::Derfile;
+    use super::TemplateFile;
+    use std::path::Path;
+
+    #[test]
+    fn test_template_file() {
+        let derfile_string = r"#
+$host = `hostname`
+$out = some/out/path/
+
+[/etc]
+final_name = name
+apply_path = $out
+hostnames = $host
+".to_string();
+
+        let template_string = 
+r"some stuff
+@@ legionnaire
+more stuff
+@!
+
+and even more stuff".to_string();
+        println!("{}", template_string);
+
+        let derfile = Derfile::load_derfile(derfile_string, &Path::new("some_path")).unwrap().parse();
+        let template = derfile.templates.iter().last().unwrap();
+        let mut template_file = TemplateFile::new(template.1.clone().into(), Some(template_string));
+        assert_eq!(template_file.parse().is_ok(), true);
+        let output = template_file.parse().unwrap().0;
+        assert_eq!(output, "some stuff\nmore stuff\n\nand even more stuff".to_string())
+    }
 }
