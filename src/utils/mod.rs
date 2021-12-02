@@ -90,23 +90,15 @@ pub fn remove_template_ext_or_dir<S: AsRef<str>, P: AsRef<Path>>(
     return final_component_string;
 }
 
-pub fn get_hostname() -> Result<String> {
-    let command = Command::new("hostname")
-        .output()?
-        .stdout;
-    let return_string = String::from_utf8(command)?;
-
-    Ok(return_string)
-}
-
 pub fn debug() -> bool {
     return DEBUG.with(|v| v.borrow().clone())
 }
 
-pub fn execute_code(command: String) -> Result<String> {
+pub fn execute_code<S: AsRef<str>>(command: S) -> Result<String> {
     // Get a list of all environmental args.
     let vars: HashMap<String, String> = env::vars().collect();
     // Split the command into its components.
+    let command = command.as_ref();
     if command.contains(" ") {
         let split: Vec<&str> = command.split(" ").collect();
         let cmd = split[0];
@@ -151,5 +143,11 @@ mod tests {
                 .unwrap(),
             "/usr"
         )
+    }
+
+    #[test]
+    fn test_execute_code() {
+        assert!(
+            super::execute_code("hostname").is_ok())
     }
 }
