@@ -1,5 +1,6 @@
 use std::cell::RefCell;
 use std::env;
+use std::fs;
 use std::path;
 
 mod derfile;
@@ -68,7 +69,9 @@ fn run(args: Args) -> Result {
             // Specifiy a derfile to be used.
             Arg::Derfile(file) => {
                 // Get an absolute path to derfile.
+                let open_derfile = fs::read_to_string(&path::Path::new(&file).canonicalize()?)?;
                 derfile = Some(derfile::Derfile::load_derfile(
+                    open_derfile,
                     &path::Path::new(&file).canonicalize()?
                 )?);
             }
@@ -82,7 +85,9 @@ fn run(args: Args) -> Result {
                 }
 
                 if derfile.is_none() {
-                    derfile = Some(derfile::Derfile::load_derfile(&derfile_default_path?)?);
+                    let derfile_default_path = &derfile_default_path?;
+                    let loaded_derfile = fs::read_to_string(&derfile_default_path)?;
+                    derfile = Some(derfile::Derfile::load_derfile(loaded_derfile, &derfile_default_path)?);
                 }
 
                 let template_structures: Vec<Template> = derfile

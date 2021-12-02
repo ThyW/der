@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::env;
-use std::fs;
 use std::path;
 
 use crate::error::*;
@@ -272,7 +271,6 @@ impl Derfile {
             new_template.recursive = cloned.recursive;
             new_template.parse_files = cloned.parse_files;
             // t.keep_structure = cloned.keep_structure;
-            println!("{:#?}", new_template);
         }
         new_derfile.vars = self.vars.clone();
         new_derfile.path = self.path.clone();
@@ -285,8 +283,7 @@ impl Derfile {
     }
 
     /// Load a derfile from disk.
-    pub fn load_derfile(path: &path::Path) -> Result<Self> {
-        let buffer = fs::read_to_string(path)?;
+    pub fn load_derfile(buffer: String, path: &path::Path) -> Result<Self> {
         let mut derfile: Derfile = Default::default();
         derfile.path = path.to_path_buf();
         let lines = buffer.lines();
@@ -457,16 +454,6 @@ impl Derfile {
                                 }
                             }
                         }
-                        /* "keep_structure" => {
-                            if let Some(table) = derfile.get_template(&template_name) {
-                                let field = split.1.strip_prefix("=").unwrap().trim();
-                                if field == "true" {
-                                    table.set_keep_structure(true)
-                                } else {
-                                    table.set_keep_structure(false)
-                                }
-                            }
-                        } */
                         "extensions" => {
                             if let Some(table) = derfile.get_template(&template_name) {
                                 let field = split.1.strip_prefix("=").unwrap().trim();
@@ -493,5 +480,35 @@ impl Derfile {
         }
 
         Ok(derfile.parse())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::Derfile;
+    use std::path::Path;
+
+    #[test]
+    fn load_and_parse_derfile() {
+        let derfile_string = r"#
+$host = `hostname`
+$out = some/out/path/
+
+[some/name.t]
+final_name = name
+apply_path = $out
+hostnames = $host
+
+[some/dir]
+final_name = outdir
+apply_path = $out:dirs/
+hostnames = $host
+parse_files = false
+extensions = t
+recursive = true
+            ".to_string();
+        let derfile_result = Derfile::load_derfile(derfile_string, &Path::new("some_path"));
+
+        assert_eq!(derfile_result.is_ok(), true);
     }
 }
