@@ -129,7 +129,7 @@ mod tests {
     use crate::{error::*, utils::visit_directories};
     #[test]
     fn dir_test() -> Result {
-        println!("{:#?}", visit_directories(&String::from("./owntest"))?);
+        println!("{:#?}", visit_directories(&String::from("./test"))?);
 
         Ok(())
     }
@@ -148,6 +148,6 @@ mod tests {
     #[test]
     fn test_execute_code() {
         assert!(
-            super::execute_code("hostname").is_ok())
+            super::execute_code("hostnamectl hostname").is_ok())
     }
 }

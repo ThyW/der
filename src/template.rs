@@ -122,7 +122,7 @@ impl TemplateFile {
 
         // Basic stuff.
         let mut ret = String::new();
-        let hostname = execute_code("hostname".to_string())?;
+        let hostname = execute_code("hostnamectl hostname".to_string())?;
         if !self.0.hostnames.contains(&hostname) {
             if debug() {
                 eprintln!(
@@ -401,7 +401,7 @@ hostnames = $host
 
         let template_string = 
 r"some stuff
-@@ legionnaire
+@@ legionnaire, terminator
 more stuff
 @!
 
