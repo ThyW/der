@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::env;
+use std::fmt;
 use std::path;
 
 use crate::error::*;
@@ -276,7 +277,7 @@ impl Derfile {
         new_derfile.path = self.path.clone();
 
         if debug() {
-            println!("{:#?}", new_derfile)
+            println!("[INFO] Parsed derfile {}:\n{}", self.path.to_str().unwrap(), new_derfile)
         };
 
         new_derfile
@@ -326,8 +327,9 @@ impl Derfile {
                 if right_side.starts_with(CODE_SEP) {
                     if let Some(index) = right_side.find(CODE_SEP) {
                         let content = right_side[index + 1..right_side.len() - 1].to_string();
-                        value = vec![execute_code(content.clone())
-                            .expect("Error: unablet to parse code block.")];
+                        value = vec![execute_code(content.clone()).map_err(|_| {
+                            format!("Unable to execute code inside a code block: {}", content)
+                        })?];
                     }
                 } else if right_side.contains(",") {
                     let split: Vec<String> = right_side
@@ -348,7 +350,9 @@ impl Derfile {
                             "env" => {
                                 if let Some(index) = right_side.find(CODE_SEP) {
                                     let env_variable = &right_side[index + 1..right_side.len() - 1];
-                                    println!("{}", env_variable);
+                                    if debug() {
+                                        println!("[INFO] Environmental variable accessed: {}", env_variable);
+                                    }
 
                                     if let Ok(env_output) = env::var(env_variable) {
                                         value = vec![env_output]
@@ -385,7 +389,6 @@ impl Derfile {
                 template_lines[0][1..template_lines[0].len() - 1].to_string();
             for line in template_lines.iter() {
                 if line.starts_with(TEMPLATE_LEFT) && line.ends_with(TEMPLATE_RIGHT) {
-                    // TODO: template name should be turned into absolute template path
                     let mut derfile_dir_path =
                         path.to_owned().clone().parent().unwrap().to_path_buf();
                     derfile_dir_path.push(&template_name);
@@ -483,6 +486,38 @@ impl Derfile {
     }
 }
 
+impl fmt::Display for Template {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "[{}]", self.name)?;
+        writeln!(f, "apply_path: {}", self.apply_path)?;
+        writeln!(f, "final_name: {}", self.final_name)?;
+        writeln!(f, "hostnames: {:?}", self.hostnames)?;
+        writeln!(f, "recursive: {}", self.recursive)?;
+        writeln!(f, "parse_files: {}", self.parse_files)?;
+        writeln!(f, "extensions: {:?}", self.extensions)
+    }
+}
+
+impl fmt::Display for Variable {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "{} = {:?}", self._name, self.value)
+    }
+}
+
+impl fmt::Display for Derfile {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for template in self.templates.iter() {
+            writeln!(f, "{}", template.1)?;
+        }
+
+        for variable in self.vars.iter() {
+            writeln!(f, "{}", variable.1)?;
+        }
+
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::Derfile;
@@ -506,7 +541,8 @@ hostnames = $host
 parse_files = false
 extensions = t
 recursive = true
-            ".to_string();
+            "
+        .to_string();
         let derfile_result = Derfile::load_derfile(derfile_string, &Path::new("some_path"));
 
         assert_eq!(derfile_result.is_ok(), true);

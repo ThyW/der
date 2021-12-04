@@ -23,7 +23,7 @@ enum Arg {
     Help,
     Derfile(String),
     Apply,
-    Print
+    Print,
 }
 
 /// Help fucntion to be diplayed when the `-h` or `--help` flags are passed.
@@ -55,6 +55,9 @@ fn parse_args(args: Vec<String>) -> Args {
 
     // print out help, if no other argument is passed
     if ret.is_empty() {
+        if !args.is_empty() {
+            println!("[ERROR] Unrecognized command line arguments!")
+        }
         ret.push(Arg::Help)
     }
 
@@ -72,7 +75,7 @@ fn run(args: Args) -> Result {
                 let open_derfile = fs::read_to_string(&path::Path::new(&file).canonicalize()?)?;
                 derfile = Some(derfile::Derfile::load_derfile(
                     open_derfile,
-                    &path::Path::new(&file).canonicalize()?
+                    &path::Path::new(&file).canonicalize()?,
                 )?);
             }
 
@@ -81,13 +84,18 @@ fn run(args: Args) -> Result {
                 let derfile_default_path = path::Path::new("./derfile").canonicalize();
 
                 if !derfile_default_path.is_ok() && derfile.clone().is_none() {
-                    return Err("Error: No derfile path specified or present!".into());
+                    return Err("Error: No derfile path specified or present!"
+                        .to_string()
+                        .into());
                 }
 
                 if derfile.is_none() {
                     let derfile_default_path = &derfile_default_path?;
                     let loaded_derfile = fs::read_to_string(&derfile_default_path)?;
-                    derfile = Some(derfile::Derfile::load_derfile(loaded_derfile, &derfile_default_path)?);
+                    derfile = Some(derfile::Derfile::load_derfile(
+                        loaded_derfile,
+                        &derfile_default_path,
+                    )?);
                 }
 
                 let template_structures: Vec<Template> = derfile
@@ -123,11 +131,14 @@ fn main() -> Result {
     let args: Vec<String> = env::args().collect();
     let parsed_args = parse_args(args);
 
-    run(parsed_args)?;
+    if let Err(e) = run(parsed_args) {
+        println!("{}", e);
+        return Ok(())
+    }
 
-    if DEBUG.with(|v| {
-        *v.borrow()
-    }) { println!("Success!")}
+    if DEBUG.with(|v| *v.borrow()) {
+        println!("Success!")
+    }
 
     Ok(())
 }

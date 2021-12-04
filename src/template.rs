@@ -102,12 +102,15 @@ impl TemplateFile {
         let result = fs::read_to_string(&self.0.path);
 
         if let Err(read_error) = result {
-            eprintln!("[WARN] Template file: {:?} could not be read read. This error was returned", read_error);
-            return Err(Error::Io(read_error))
+            eprintln!(
+                "[WARN] Template file: {:?} could not be read read. This error was returned",
+                read_error
+            );
+            return Err(Error::Io(read_error));
         } else {
             let contents = result.unwrap();
             self.1 = Some(contents);
-            return Ok(())
+            return Ok(());
         }
     }
 
@@ -127,11 +130,14 @@ impl TemplateFile {
             if debug() {
                 eprintln!(
                     "[WARN] $HOSTNAME not in hostnames for template file: {}",
-                    self.0.path)
+                    self.0.path
+                )
             }
         }
         if !path::Path::new(&self.0.path).exists() {
-            return Err("Error parsing template file: File does not exist1".into());
+            return Err("Error parsing template file: File does not exist1"
+                .to_string()
+                .into());
         }
         let file_lines: String;
 
@@ -162,7 +168,7 @@ impl TemplateFile {
             .count();
 
         if open_code_blocks_count != closed_code_blocks_count {
-            return Err("Error when parsing template file: Open template blocks don't match closed template blocks!".into());
+            return Err("Error when parsing template file: Open template blocks don't match closed template blocks!".to_string().into());
         }
 
         if open_code_blocks_count == 0 {
@@ -344,7 +350,10 @@ impl TemplateDirectory {
                     ret.append(&mut dir.parse()?);
                 }
             } else if metadata.is_file() {
-                ret.push(TemplateStructure::File(TemplateFile::new(cloned_settings, None)));
+                ret.push(TemplateStructure::File(TemplateFile::new(
+                    cloned_settings,
+                    None,
+                )));
             } else {
                 // FIXME
                 // symlinks and other stuff is skipped too
@@ -397,22 +406,28 @@ $out = some/out/path/
 final_name = name
 apply_path = $out
 hostnames = $host
-".to_string();
+"
+        .to_string();
 
-        let template_string = 
-r"some stuff
+        let template_string = r"some stuff
 @@ legionnaire, terminator
 more stuff
 @!
 
-and even more stuff".to_string();
+and even more stuff"
+            .to_string();
         println!("{}", template_string);
 
-        let derfile = Derfile::load_derfile(derfile_string, &Path::new("some_path")).unwrap().parse();
+        let derfile = Derfile::load_derfile(derfile_string, &Path::new("some_path"))
+            .unwrap()
+            .parse();
         let template = derfile.templates.iter().last().unwrap();
         let mut template_file = TemplateFile::new(template.1.clone().into(), Some(template_string));
         assert_eq!(template_file.parse().is_ok(), true);
         let output = template_file.parse().unwrap().0;
-        assert_eq!(output, "some stuff\nmore stuff\n\nand even more stuff".to_string())
+        assert_eq!(
+            output,
+            "some stuff\nmore stuff\n\nand even more stuff".to_string()
+        )
     }
 }

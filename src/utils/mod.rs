@@ -56,7 +56,7 @@ pub fn list_dir<P: AsRef<Path>>(path: &P) -> Result<Vec<fs::DirEntry>> {
             ret.push(each?)
         }
     } else {
-        return Err("Not a directory!".into());
+        return Err("Not a directory!".to_string().into());
     }
 
     Ok(ret)
@@ -91,7 +91,7 @@ pub fn remove_template_ext_or_dir<S: AsRef<str>, P: AsRef<Path>>(
 }
 
 pub fn debug() -> bool {
-    return DEBUG.with(|v| v.borrow().clone())
+    return DEBUG.with(|v| v.borrow().clone());
 }
 
 pub fn execute_code<S: AsRef<str>>(command: S) -> Result<String> {
@@ -147,7 +147,6 @@ mod tests {
 
     #[test]
     fn test_execute_code() {
-        assert!(
-            super::execute_code("hostnamectl hostname").is_ok())
+        assert!(super::execute_code("hostnamectl hostname").is_ok())
     }
 }
