@@ -3,6 +3,7 @@ use std::env;
 use std::fs;
 use std::path;
 
+mod config;
 mod derfile;
 mod error;
 mod template;
@@ -11,6 +12,7 @@ mod utils;
 use derfile::*;
 use error::*;
 use template::*;
+use config::*;
 
 // Global variable for debugging
 thread_local! {static DEBUG: RefCell<bool> = RefCell::new(false)}
@@ -24,6 +26,7 @@ enum Arg {
     Derfile(String),
     Apply,
     Print,
+    Config(String),
 }
 
 /// Help fucntion to be diplayed when the `-h` or `--help` flags are passed.
@@ -31,10 +34,11 @@ fn help_function() {
     println!("der v0.1");
     println!("author: J. Kapko <kamo.bavmesa@gmail.com>");
     println!("about: der is a tool for qucik multisystem application of dotfiles, with template supporting.\n");
-    println!("-a --apply PATH                                           Apply using  specified path to derfile.");
-    println!("-f --file  PATH                                           Use a specified derfile.");
-    println!("-h --help  PATH                                           Show this help message.");
-    println!("-p --print                                                Print status messages and debug info.")
+    println!("-c --config PATH                                           Use a specific config file.");
+    println!("-a --apply  PATH                                           Apply using  specified path to derfile.");
+    println!("-f --file   PATH                                           Use a specified derfile.");
+    println!("-h --help   PATH                                           Show this help message.");
+    println!("-p --print                                                 Print status messages and debug info.")
 }
 
 /// Get a list of passed in command line arguments.
@@ -49,6 +53,7 @@ fn parse_args(args: Vec<String>) -> Args {
             "-f" | "--file" => ret.push(Arg::Derfile(args[i + 1].clone())),
             "-a" | "--apply" => ret.push(Arg::Apply),
             "-p" | "--print" => ret.push(Arg::Print),
+            "-c" | "--config" => ret.push(Arg::Config(args[i + 1].clone())),
             _ => (),
         }
     }
@@ -67,15 +72,19 @@ fn parse_args(args: Vec<String>) -> Args {
 /// Parse arguments and run the application.
 fn run(args: Args) -> Result {
     let mut derfile: Option<Derfile> = None;
+    let mut config = Config::default();
     for arg in args {
         match arg {
+            Arg::Config(config_path) => {
+                config = Config::load(&config_path)?;
+            }
             // Specifiy a derfile to be used.
             Arg::Derfile(file) => {
                 // Get an absolute path to derfile.
                 let open_derfile = fs::read_to_string(&path::Path::new(&file).canonicalize()?)?;
                 derfile = Some(derfile::Derfile::load_derfile(
                     open_derfile,
-                    &path::Path::new(&file).canonicalize()?,
+                    &path::Path::new(&file).canonicalize()?
                 )?);
             }
 
@@ -96,6 +105,10 @@ fn run(args: Args) -> Result {
                         loaded_derfile,
                         &derfile_default_path,
                     )?);
+                }
+
+                if let Some(d) = &mut derfile {
+                    d.with_config(&mut config)
                 }
 
                 let template_structures: Vec<Template> = derfile

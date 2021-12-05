@@ -5,6 +5,7 @@ use std::path;
 
 use crate::error::*;
 use crate::utils::*;
+use crate::config::*;
 
 /// Symbols for derfile parsing, these can be changed before compilation.
 pub const TEMPLATE_LEFT: &str = "[";
@@ -52,7 +53,7 @@ pub struct Derfile {
     /// Key value pairs of variable names and their values.
     pub vars: HashMap<String, Variable>,
     /// Absolute path to derfile.
-    path: path::PathBuf,
+    pub(crate) path: path::PathBuf,
 }
 
 /// Just some setters for working with templates.
@@ -84,12 +85,24 @@ impl Template {
     pub fn add_extension(&mut self, ext: String) {
         self.extensions.push(ext)
     }
+
+    fn serialize_hostnames(&self) -> String {
+        return self.hostnames.join(", ")
+    }
+
+    fn serialize_extensions(&self) -> String {
+        return self.extensions.join(", ")
+    }
 }
 
 impl Variable {
     /// Construct a new variable.
     fn new(_name: String, value: Vec<String>) -> Self {
         Self { _name, value }
+    }
+
+    fn serialize(&self) -> String {
+        self.value.join(", ")
     }
 }
 
@@ -109,12 +122,22 @@ impl Derfile {
         self.vars.insert(name.clone(), Variable::new(name, value));
     }
 
+    /// Get a value of a varialbe.
     pub fn get_var<S: AsRef<str>>(&mut self, name: &S) -> Option<&mut Variable> {
         self.vars.get_mut(name.as_ref())
     }
 
+    pub fn with_config(&mut self, config: &mut Config) {
+        let vars = config.merge_vars();
+        for each in vars {
+            self.add_var(each.0.clone(), each.1.value.clone());
+        }
+        let template = config.config_template().clone();
+        self.templates.insert("default".to_string(), template);
+    }
+
     /// Parse a template file, which has already been loaded.
-    pub fn parse(self) -> Self {
+    fn parse(self) -> Self {
         // Create a new output derfile into which we will parse our current defile.
         let mut new_derfile: Derfile = Default::default();
         // We create a clone of self for a simpler data manipulation.
@@ -489,18 +512,18 @@ impl Derfile {
 impl fmt::Display for Template {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "[{}]", self.name)?;
-        writeln!(f, "apply_path: {}", self.apply_path)?;
-        writeln!(f, "final_name: {}", self.final_name)?;
-        writeln!(f, "hostnames: {:?}", self.hostnames)?;
-        writeln!(f, "recursive: {}", self.recursive)?;
-        writeln!(f, "parse_files: {}", self.parse_files)?;
-        writeln!(f, "extensions: {:?}", self.extensions)
+        writeln!(f, "apply_path  = {}", self.apply_path)?;
+        writeln!(f, "final_name: = {}", self.final_name)?;
+        writeln!(f, "hostnames: = {}", self.serialize_hostnames())?;
+        writeln!(f, "recursive: = {}", self.recursive)?;
+        writeln!(f, "parse_files: = {}", self.parse_files)?;
+        writeln!(f, "extensions: = {:?}", self.serialize_extensions())
     }
 }
 
 impl fmt::Display for Variable {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "{} = {:?}", self._name, self.value)
+        writeln!(f, "{} = {:?}", self._name, self.serialize())
     }
 }
 
@@ -546,5 +569,27 @@ recursive = true
         let derfile_result = Derfile::load_derfile(derfile_string, &Path::new("some_path"));
 
         assert_eq!(derfile_result.is_ok(), true);
+    }
+
+    #[test]
+    fn serialization_test() {
+        let derfile_string = r"#
+$host = some, real, weird, hostnames
+
+[some/name.t]
+final_name = name
+apply_path = some/path/
+hostnames = $host
+extensions = t, g, h
+            "
+        .to_string();
+        let derfile_result = Derfile::load_derfile(derfile_string, &Path::new("some_path")).unwrap();
+        let template = derfile_result.templates.iter().last().unwrap().1;
+        let variable = derfile_result.vars.iter().last().unwrap().1;
+
+        assert_eq!(template.serialize_hostnames(), "some, real, weird, hostnames".to_string());
+        assert_eq!(template.serialize_extensions(), "t, g, h".to_string());
+        assert_eq!(variable.serialize(), "some, real, weird, hostnames".to_string());
+        
     }
 }

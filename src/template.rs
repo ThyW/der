@@ -414,8 +414,7 @@ hostnames = $host
         let template_string = format!("some stuff\n@@ {}\nmore stuff\n@!\nand even more stuff\n", hostname);
 
         let derfile = Derfile::load_derfile(derfile_string, &Path::new("some_path"))
-            .unwrap()
-            .parse();
+            .unwrap();
         let template = derfile.templates.iter().last().unwrap();
         let mut template_file = TemplateFile::new(template.1.clone().into(), Some(template_string));
         assert_eq!(template_file.parse().is_ok(), true);
