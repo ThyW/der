@@ -126,12 +126,9 @@ pub fn execute_code<S: AsRef<str>>(command: S) -> Result<String> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{error::*, utils::visit_directories};
     #[test]
-    fn dir_test() -> Result {
-        println!("{:#?}", visit_directories(&String::from("./test"))?);
-
-        Ok(())
+    fn dir_test() {
+        assert!(super::visit_directories(&String::from("./test")).is_ok());
     }
 
     #[test]
@@ -148,5 +145,10 @@ mod tests {
     #[test]
     fn test_execute_code() {
         assert!(super::execute_code("hostnamectl hostname").is_ok())
+    }
+
+    #[test]
+    fn test_hostname() {
+        assert_eq!(super::execute_code("hostnamectl hostname").unwrap(), super::execute_code("cat /etc/hostname").unwrap())
     }
 }

@@ -526,7 +526,7 @@ mod test {
     #[test]
     fn load_and_parse_derfile() {
         let derfile_string = r"#
-$host = `hostname`
+$host = `hostnamectl hostname`
 $out = some/out/path/
 
 [some/name.t]

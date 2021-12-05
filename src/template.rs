@@ -394,10 +394,12 @@ pub fn recursive_build(input: Vec<derfile::Template>) -> Result<TemplateStructur
 mod test {
     use super::derfile::Derfile;
     use super::TemplateFile;
+    use super::execute_code;
     use std::path::Path;
 
     #[test]
     fn test_template_file() {
+        let hostname = execute_code("cat /etc/hostname").unwrap();
         let derfile_string = r"#
 $host = `hostname`
 $out = some/out/path/
@@ -409,14 +411,7 @@ hostnames = $host
 "
         .to_string();
 
-        let template_string = r"some stuff
-@@ legionnaire, terminator
-more stuff
-@!
-
-and even more stuff"
-            .to_string();
-        println!("{}", template_string);
+        let template_string = format!("some stuff\n@@ {}\nmore stuff\n@!\nand even more stuff\n", hostname);
 
         let derfile = Derfile::load_derfile(derfile_string, &Path::new("some_path"))
             .unwrap()
@@ -427,7 +422,7 @@ and even more stuff"
         let output = template_file.parse().unwrap().0;
         assert_eq!(
             output,
-            "some stuff\nmore stuff\n\nand even more stuff".to_string()
+            "some stuff\nmore stuff\nand even more stuff".to_string()
         )
     }
 }
