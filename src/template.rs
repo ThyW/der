@@ -256,12 +256,15 @@ impl TemplateFile {
                 ret.push_str(&ready_block.join("\n"));
                 last_ln = *end + 1;
             } else {
+                ret.push_str(&file_lines_vec[last_ln..*start].join("\n"));
+                ret.push('\n');
                 last_ln = *end + 1
             }
             if ii == parsed_code_blocks.len() - 1 {
                 ret.push_str(&file_lines_vec[*end + 1..].join("\n"));
             }
         }
+        ret.push('\n');
 
         Ok(ParsedTemplate(ret))
     }
