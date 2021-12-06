@@ -54,6 +54,8 @@ pub struct Derfile {
     pub vars: HashMap<String, Variable>,
     /// Absolute path to derfile.
     pub(crate) path: path::PathBuf,
+    /// Which fileds are empty
+    pub(crate) empty_fields: u8,
 }
 
 /// Just some setters for working with templates.
@@ -86,22 +88,22 @@ impl Template {
         self.extensions.push(ext)
     }
 
-    fn serialize_hostnames(&self) -> String {
-        return self.hostnames.join(", ")
+    pub(crate)fn serialize_hostnames(&self) -> String {
+        return self.hostnames.join("," )
     }
 
-    fn serialize_extensions(&self) -> String {
-        return self.extensions.join(", ")
+    pub(crate)fn serialize_extensions(&self) -> String {
+        return self.extensions.join(",")
     }
 }
 
 impl Variable {
     /// Construct a new variable.
-    fn new(_name: String, value: Vec<String>) -> Self {
+    pub fn new(_name: String, value: Vec<String>) -> Self {
         Self { _name, value }
     }
 
-    fn serialize(&self) -> String {
+    pub(crate) fn serialize(&self) -> String {
         self.value.join(", ")
     }
 }
@@ -127,13 +129,15 @@ impl Derfile {
         self.vars.get_mut(name.as_ref())
     }
 
-    pub fn with_config(&mut self, config: &mut Config) {
-        let vars = config.merge_vars();
-        for each in vars {
-            self.add_var(each.0.clone(), each.1.value.clone());
+    pub fn with_config(&mut self, config: &Config) {
+        for each in &config.vars {
+            self.vars.insert(each._name.clone(), each.clone());
         }
-        let template = config.config_template().clone();
-        self.templates.insert("default".to_string(), template);
+
+        self.add_template("[default-template]".to_string());
+        if let Some(default_template) = self.get_template(&"[default-template]".to_string()) {
+            *default_template = config.template.clone();
+        }
     }
 
     /// Parse a template file, which has already been loaded.
@@ -142,7 +146,18 @@ impl Derfile {
         let mut new_derfile: Derfile = Default::default();
         // We create a clone of self for a simpler data manipulation.
         let mut self_clone = self.clone();
+        let default_template: Template;
+        if let Some(dt) = self_clone.get_template(&"[default-template]".to_string()) {
+            default_template = dt.clone(); 
+        } else {
+            default_template = Template::default();
+        }
+
         for (template_name, template) in self.templates.iter() {
+            // always skip config template
+            if template_name == "[default-template]" {
+                continue
+            }
             // For each template in our current derfile, we create a new temlate field in the new
             // derfile.
             new_derfile.add_template(template_name.clone());
@@ -251,50 +266,65 @@ impl Derfile {
             }
 
             let mut hostname_clone: Vec<String> = Vec::new();
-            for hostname_entry in template.hostnames.iter() {
-                if hostname_entry.starts_with(VAR_PREF) {
-                    if let Some(variable) = self_clone
-                        .get_var(&hostname_entry.strip_prefix(VAR_PREF).unwrap().to_string())
-                    {
-                        let mut variable_value = variable.value.clone();
-                        hostname_clone.append(&mut variable_value);
-                    }
-                } else {
-                    hostname_clone.push(hostname_entry.to_string())
-                }
-            }
-
-            new_template.hostnames = hostname_clone;
-
-            let mut extensions_clone: Vec<String> = Vec::new();
-            for extension in template.extensions.iter() {
-                if extension.starts_with(VAR_PREF) {
-                    if extension.contains(VAR_ADD) {
-                        let split_variable = extension.split_at(extension.find(VAR_ADD).unwrap());
-                        let variable_name = split_variable.0.strip_prefix(VAR_PREF).unwrap().trim();
-                        let additional_value = split_variable.1.strip_prefix(VAR_ADD).unwrap();
-                        if let Some(variable) = self_clone.get_var(&variable_name.to_string()) {
-                            let mut variable_value = variable.value.clone();
-                            variable_value.push(additional_value.to_string());
-                            extensions_clone.append(&mut variable_value)
-                        }
-                    } else {
+            if template.hostnames.is_empty() {
+                new_template.hostnames = default_template.clone().hostnames;
+            } else {
+                for hostname_entry in template.hostnames.iter() {
+                    if hostname_entry.starts_with(VAR_PREF) {
                         if let Some(variable) = self_clone
-                            .get_var(&extension.strip_prefix(VAR_PREF).unwrap().to_string())
+                            .get_var(&hostname_entry.strip_prefix(VAR_PREF).unwrap().to_string())
                         {
                             let mut variable_value = variable.value.clone();
-                            extensions_clone.append(&mut variable_value)
+                            hostname_clone.append(&mut variable_value);
                         }
+                    } else {
+                        hostname_clone.push(hostname_entry.to_string())
                     }
-                } else {
-                    extensions_clone.push(extension.to_string())
                 }
+                new_template.hostnames = hostname_clone;
             }
-            new_template.extensions = extensions_clone;
-            let cloned = self_clone.get_template(&template_name).unwrap();
-            new_template.recursive = cloned.recursive;
-            new_template.parse_files = cloned.parse_files;
-            // t.keep_structure = cloned.keep_structure;
+
+            let mut extensions_clone: Vec<String> = Vec::new();
+            if template.extensions.is_empty() {
+                new_template.extensions = default_template.clone().extensions;
+            } else {
+                for extension in template.extensions.iter() {
+                    if extension.starts_with(VAR_PREF) {
+                        if extension.contains(VAR_ADD) {
+                            let split_variable = extension.split_at(extension.find(VAR_ADD).unwrap());
+                            let variable_name = split_variable.0.strip_prefix(VAR_PREF).unwrap().trim();
+                            let additional_value = split_variable.1.strip_prefix(VAR_ADD).unwrap();
+                            if let Some(variable) = self_clone.get_var(&variable_name.to_string()) {
+                                let mut variable_value = variable.value.clone();
+                                variable_value.push(additional_value.to_string());
+                                extensions_clone.append(&mut variable_value)
+                            }
+                        } else {
+                            if let Some(variable) = self_clone
+                                .get_var(&extension.strip_prefix(VAR_PREF).unwrap().to_string())
+                            {
+                                let mut variable_value = variable.value.clone();
+                                extensions_clone.append(&mut variable_value)
+                            }
+                        }
+                    } else {
+                        extensions_clone.push(extension.to_string())
+                    }
+                }
+                new_template.extensions = extensions_clone;
+            }
+
+            if (self_clone.empty_fields & 0b00001000) == 0 {
+                new_template.recursive = default_template.recursive;
+            } else {
+                new_template.recursive = template.recursive
+            }
+
+            if (self_clone.empty_fields & 0b00010000) == 0 {
+                new_template.parse_files = default_template.parse_files
+            } else {
+                new_template.parse_files = template.parse_files;
+            }
         }
         new_derfile.vars = self.vars.clone();
         new_derfile.path = self.path.clone();
@@ -307,7 +337,7 @@ impl Derfile {
     }
 
     /// Load a derfile from disk.
-    pub fn load_derfile(buffer: String, path: &path::Path) -> Result<Self> {
+    pub fn load_derfile(buffer: String, path: &path::Path, config: &Config) -> Result<Self> {
         let mut derfile: Derfile = Default::default();
         derfile.path = path.to_path_buf();
         let lines = buffer.lines();
@@ -433,7 +463,8 @@ impl Derfile {
                         "final_name" => {
                             if let Some(table) = derfile.get_template(&template_name) {
                                 let final_name = split.1.strip_prefix("=").unwrap().trim();
-                                table.set_final_name(final_name.to_string())
+                                table.set_final_name(final_name.to_string());
+                                derfile.empty_fields |= 0b00000001;
                             }
                         }
                         "hostnames" => {
@@ -447,17 +478,20 @@ impl Derfile {
                                             table.add_hostname(each.trim().to_string())
                                         }
                                     }
+                                    derfile.empty_fields |= 0b00000010;
                                 } else {
                                     table.add_hostname(
                                         split.1.strip_prefix("=").unwrap().trim().to_string(),
-                                    )
+                                    );
+                                    derfile.empty_fields |= 0b00000010;
                                 }
                             }
                         }
                         "apply_path" => {
                             if let Some(table) = derfile.get_template(&template_name) {
                                 let apply_path = split.1.strip_prefix("=").unwrap().trim();
-                                table.set_apply_path(apply_path.to_string())
+                                table.set_apply_path(apply_path.to_string());
+                                derfile.empty_fields |= 0b00000100;
                             }
                         }
                         "recursive" => {
@@ -468,6 +502,7 @@ impl Derfile {
                                 } else {
                                     table.set_recursive(false)
                                 }
+                                derfile.empty_fields |= 0b00001000;
                             }
                         }
                         "parse_files" => {
@@ -478,6 +513,7 @@ impl Derfile {
                                 } else {
                                     table.set_parse_files(false)
                                 }
+                                derfile.empty_fields |= 0b00010000;
                             }
                         }
                         "extensions" => {
@@ -486,10 +522,12 @@ impl Derfile {
                                 if field.contains(",") {
                                     for split_component in field.split(",") {
                                         // println!("{}", split_component.trim());
-                                        table.add_extension(split_component.trim().to_string())
+                                        table.add_extension(split_component.trim().to_string());
                                     }
+                                    derfile.empty_fields |= 0b00100000
                                 } else {
-                                    table.add_extension(field.trim().to_string())
+                                    table.add_extension(field.trim().to_string());
+                                    derfile.empty_fields |= 0b00100000;
                                 }
                             }
                         }
@@ -504,26 +542,29 @@ impl Derfile {
                 }
             }
         }
+        let mut d = derfile.clone();
+        d.with_config(config);
+        derfile = d.parse();
 
-        Ok(derfile.parse())
+        Ok(derfile)
     }
 }
 
 impl fmt::Display for Template {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "[{}]", self.name)?;
-        writeln!(f, "apply_path  = {}", self.apply_path)?;
-        writeln!(f, "final_name: = {}", self.final_name)?;
-        writeln!(f, "hostnames: = {}", self.serialize_hostnames())?;
-        writeln!(f, "recursive: = {}", self.recursive)?;
-        writeln!(f, "parse_files: = {}", self.parse_files)?;
-        writeln!(f, "extensions: = {:?}", self.serialize_extensions())
+        writeln!(f, "apply_path = {}", self.apply_path)?;
+        writeln!(f, "final_name = {}", self.final_name)?;
+        writeln!(f, "hostnames = {}", self.serialize_hostnames())?;
+        writeln!(f, "recursive = {}", self.recursive)?;
+        writeln!(f, "parse_files = {}", self.parse_files)?;
+        writeln!(f, "extensions = {}", self.serialize_extensions())
     }
 }
 
 impl fmt::Display for Variable {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "{} = {:?}", self._name, self.serialize())
+        writeln!(f, "${} = {:?}", self._name, self.serialize())
     }
 }
 
@@ -543,7 +584,7 @@ impl fmt::Display for Derfile {
 
 #[cfg(test)]
 mod test {
-    use crate::Derfile;
+    use super::*;
     use std::path::Path;
 
     #[test]
@@ -566,7 +607,7 @@ extensions = t
 recursive = true
             "
         .to_string();
-        let derfile_result = Derfile::load_derfile(derfile_string, &Path::new("some_path"));
+        let derfile_result = Derfile::load_derfile(derfile_string, &Path::new("some_path"), &Config::default());
 
         assert_eq!(derfile_result.is_ok(), true);
     }
@@ -583,12 +624,12 @@ hostnames = $host
 extensions = t, g, h
             "
         .to_string();
-        let derfile_result = Derfile::load_derfile(derfile_string, &Path::new("some_path")).unwrap();
-        let template = derfile_result.templates.iter().last().unwrap().1;
+        let derfile_result = Derfile::load_derfile(derfile_string, &Path::new("some_path"), &Config::default()).unwrap();
+        let template = derfile_result.templates.iter().filter(|t| t.0 != "[default-template]").last().unwrap().1;
         let variable = derfile_result.vars.iter().last().unwrap().1;
 
-        assert_eq!(template.serialize_hostnames(), "some, real, weird, hostnames".to_string());
-        assert_eq!(template.serialize_extensions(), "t, g, h".to_string());
+        assert_eq!(template.serialize_hostnames(), "some,real,weird,hostnames".to_string());
+        assert_eq!(template.serialize_extensions(), "t,g,h".to_string());
         assert_eq!(variable.serialize(), "some, real, weird, hostnames".to_string());
         
     }

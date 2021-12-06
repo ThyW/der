@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::env;
 use std::fs;
 use std::path;
+use std::process::exit;
 
 mod config;
 mod derfile;
@@ -11,8 +12,9 @@ mod utils;
 
 use derfile::*;
 use error::*;
-use template::*;
 use config::*;
+use template::*;
+// use utils::execute_code;
 
 // Global variable for debugging
 thread_local! {static DEBUG: RefCell<bool> = RefCell::new(false)}
@@ -50,10 +52,34 @@ fn parse_args(args: Vec<String>) -> Args {
     for (i, entry) in args.iter().enumerate() {
         match &entry[..] {
             "-h" | "--help" => ret.push(Arg::Help),
-            "-f" | "--file" => ret.push(Arg::Derfile(args[i + 1].clone())),
+            "-f" | "--file" => {
+                if i + 1 != args.len() {
+                    if !args[i + 1].starts_with("-") {
+                        ret.push(Arg::Derfile(args[i + 1].clone()))
+                    } else {
+                        println!("[ERROR] Missing arguments for --file!");
+                        exit(1)
+                    }
+                } else {
+                    println!("[ERROR] Missing arguments for --file!");
+                    exit(1)
+                }
+            }
             "-a" | "--apply" => ret.push(Arg::Apply),
             "-p" | "--print" => ret.push(Arg::Print),
-            "-c" | "--config" => ret.push(Arg::Config(args[i + 1].clone())),
+            "-c" | "--config" => {
+                if i + 1 != args.len() {
+                    if !args[i + 1].starts_with("-") {
+                        ret.push(Arg::Config(args[i + 1].clone()))
+                    } else {
+                        println!("[ERROR] Missing arguments for --config!");
+                        exit(1)
+                    }
+                } else {
+                    println!("[ERROR] Missing arguments for --config!");
+                    exit(1)
+                }
+            }
             _ => (),
         }
     }
@@ -72,11 +98,17 @@ fn parse_args(args: Vec<String>) -> Args {
 /// Parse arguments and run the application.
 fn run(args: Args) -> Result {
     let mut derfile: Option<Derfile> = None;
-    let mut config = Config::default();
+    let mut config: Config;
+    config = Config::load_default()?;
     for arg in args {
         match arg {
             Arg::Config(config_path) => {
-                config = Config::load(&config_path)?;
+                if let Ok(conf) = Config::load(&config_path) {
+                    config = conf;
+                    println!("{}", config)
+                } else {
+                    config = Config::load_default()?;
+                }
             }
             // Specifiy a derfile to be used.
             Arg::Derfile(file) => {
@@ -84,7 +116,8 @@ fn run(args: Args) -> Result {
                 let open_derfile = fs::read_to_string(&path::Path::new(&file).canonicalize()?)?;
                 derfile = Some(derfile::Derfile::load_derfile(
                     open_derfile,
-                    &path::Path::new(&file).canonicalize()?
+                    &path::Path::new(&file).canonicalize()?,
+                    &config
                 )?);
             }
 
@@ -104,11 +137,8 @@ fn run(args: Args) -> Result {
                     derfile = Some(derfile::Derfile::load_derfile(
                         loaded_derfile,
                         &derfile_default_path,
+                        &config
                     )?);
-                }
-
-                if let Some(d) = &mut derfile {
-                    d.with_config(&mut config)
                 }
 
                 let template_structures: Vec<Template> = derfile

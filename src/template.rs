@@ -399,6 +399,7 @@ mod test {
     use super::TemplateFile;
     use super::execute_code;
     use std::path::Path;
+    use crate::config::Config;
 
     #[test]
     fn test_template_file() {
@@ -416,15 +417,16 @@ hostnames = $host
 
         let template_string = format!("some stuff\n@@ {}\nmore stuff\n@!\nand even more stuff\n", hostname);
 
-        let derfile = Derfile::load_derfile(derfile_string, &Path::new("some_path"))
+        let derfile = Derfile::load_derfile(derfile_string, &Path::new("some_path"), &Config::default())
             .unwrap();
-        let template = derfile.templates.iter().last().unwrap();
-        let mut template_file = TemplateFile::new(template.1.clone().into(), Some(template_string));
+        let template = derfile.templates.iter().filter(|t| t.0 != "[default-template]").last().unwrap().1;
+        let mut template_file = TemplateFile::new(template.clone().into(), Some(template_string));
         assert_eq!(template_file.parse().is_ok(), true);
         let output = template_file.parse().unwrap().0;
+        println!("{}", output);
         assert_eq!(
             output,
-            "some stuff\nmore stuff\nand even more stuff".to_string()
+            "some stuff\nmore stuff\nand even more stuff\n".to_string()
         )
     }
 }
