@@ -150,11 +150,8 @@ fn run(args: Args) -> Result {
                     .collect();
                 let vecs = recursive_build(template_structures)?;
                 for structure in vecs {
-                    match structure {
-                        TemplateStructure::File(mut f) => {
-                            f.apply()?;
-                        }
-                        _ => {}
+                    if let TemplateStructure::File(mut f) = structure {
+                        f.apply()?;
                     }
                 }
             }

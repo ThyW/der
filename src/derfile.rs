@@ -336,8 +336,10 @@ impl Derfile {
 
     /// Load a derfile from disk.
     pub fn load_derfile(buffer: String, path: &path::Path, config: &Config) -> Result<Self> {
-        let mut derfile: Derfile = Default::default();
-        derfile.path = path.to_path_buf();
+        let mut derfile: Derfile = Derfile {
+            path: path.to_path_buf(),
+            ..Default::default()
+        };
         let lines = buffer.lines();
 
         // list of template definitions(lines that start with "[" and end with "]")
@@ -396,21 +398,16 @@ impl Derfile {
                 // implemented here. So far, there's only "env", which is used to retrieve environmental
                 // variables
                 for each in CODE_KEYWORDS {
-                    if right_side.starts_with(each) {
-                        match each {
-                            "env" => {
-                                if let Some(index) = right_side.find(CODE_SEP) {
-                                    let env_variable = &right_side[index + 1..right_side.len() - 1];
-                                    if debug() {
-                                        println!("[INFO] Environmental variable accessed: {}", env_variable);
-                                    }
-
-                                    if let Ok(env_output) = env::var(env_variable) {
-                                        value = vec![env_output]
-                                    }
-                                }
+                    if right_side.starts_with(each) && each == "env" {
+                        if let Some(index) = right_side.find(CODE_SEP) {
+                            let env_variable = &right_side[index + 1..right_side.len() - 1];
+                            if debug() {
+                                println!("[INFO] Environmental variable accessed: {}", env_variable);
                             }
-                            _ => {}
+
+                            if let Ok(env_output) = env::var(env_variable) {
+                                value = vec![env_output]
+                            }
                         }
                     }
                 }
@@ -425,9 +422,7 @@ impl Derfile {
 
             // TODO: inefficient? shouldn't clone on each iteration,
             // but maybe its okay since its dropped before the next iteration?
-            if template_indecies.len() == 1 {
-                template_lines = lines.clone().drain(index..).collect();
-            } else if ii == template_indecies.len() - 1 {
+            if template_indecies.len() == 1 || ii == template_indecies.len() - 1 {
                 template_lines = lines.clone().drain(index..).collect();
             } else {
                 template_lines = lines

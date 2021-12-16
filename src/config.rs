@@ -10,19 +10,10 @@ use crate::utils::{execute_code, debug};
 
 type Variables = Vec<Variable>;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Config {
     pub(crate) template: Template,
     pub(crate) vars: Variables
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            template: Template::default(),
-            vars: vec![]
-        }
-    }
 }
 
 impl Config {
@@ -49,7 +40,7 @@ impl Config {
                 let right_part = split.1.trim().strip_prefix('=').unwrap().trim();
 
                 if left_part.contains(VAR_PREF) {
-                    let mut env_keyword_string = CODE_KEYWORDS[0].clone().to_string();
+                    let mut env_keyword_string = <&str>::clone(&CODE_KEYWORDS[0]).to_string();
                     env_keyword_string.push_str(CODE_SEP);
                     let var_name = left_part.strip_prefix(VAR_PREF).unwrap();
 

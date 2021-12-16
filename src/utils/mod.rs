@@ -64,7 +64,7 @@ pub fn list_dir<P: AsRef<Path>>(path: &P) -> Result<Vec<fs::DirEntry>> {
 
 pub fn remove_template_ext_or_dir<S: AsRef<str>, P: AsRef<Path>>(
     haystack: &P,
-    needles: &Vec<S>,
+    needles: &[S],
 ) -> String {
     let path = haystack.as_ref().to_path_buf();
     // HACK: fix this pls
@@ -82,7 +82,7 @@ pub fn remove_template_ext_or_dir<S: AsRef<str>, P: AsRef<Path>>(
     let ext = path.extension().unwrap().to_str().unwrap();
 
     for each in needles {
-        if each.as_ref() == ext.clone() {
+        if each.as_ref() == <&str>::clone(&ext) {
             return final_component_string.replace(&format!(".{}", ext), "");
         }
     }
