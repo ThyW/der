@@ -89,11 +89,11 @@ impl Template {
     }
 
     pub(crate)fn serialize_hostnames(&self) -> String {
-        return self.hostnames.join("," )
+        self.hostnames.join("," )
     }
 
     pub(crate)fn serialize_extensions(&self) -> String {
-        return self.extensions.join(",")
+        self.extensions.join(",")
     }
 }
 
@@ -299,13 +299,11 @@ impl Derfile {
                                 variable_value.push(additional_value.to_string());
                                 extensions_clone.append(&mut variable_value)
                             }
-                        } else {
-                            if let Some(variable) = self_clone
-                                .get_var(&extension.strip_prefix(VAR_PREF).unwrap().to_string())
-                            {
-                                let mut variable_value = variable.value.clone();
-                                extensions_clone.append(&mut variable_value)
-                            }
+                        } else if let Some(variable) = self_clone
+                            .get_var(&extension.strip_prefix(VAR_PREF).unwrap().to_string())
+                        {
+                            let mut variable_value = variable.value.clone();
+                            extensions_clone.append(&mut variable_value)
                         }
                     } else {
                         extensions_clone.push(extension.to_string())
@@ -349,14 +347,14 @@ impl Derfile {
             .filter(|line| {
                 line.1.trim().starts_with(TEMPLATE_LEFT) && line.1.trim().ends_with(TEMPLATE_RIGHT)
             })
-            .map(|each| return each.0)
+            .map(|each| each.0)
             .collect();
 
         let var_lines: Vec<String> = lines
             .clone()
             .enumerate()
             .filter(|line| line.1.trim().starts_with(VAR_PREF))
-            .map(|each| return each.1.to_string())
+            .map(|each| each.1.to_string())
             .collect();
 
         // [x] variables from shell code
@@ -371,11 +369,11 @@ impl Derfile {
         // something like this: "env`$PATH`" could return the actual value of our environmental
         // variable.
         for line in var_lines.iter() {
-            if line.contains("=") {
-                let split = line.split_at(line.find("=").unwrap());
+            if line.contains('=') {
+                let split = line.split_at(line.find('=').unwrap());
                 let name = split.0.trim().strip_prefix(VAR_PREF).unwrap().to_string();
                 let mut value: Vec<String> = Vec::new();
-                let right_side = split.1.trim().strip_prefix("=").unwrap().trim().to_string();
+                let right_side = split.1.trim().strip_prefix('=').unwrap().trim().to_string();
 
                 if right_side.starts_with(CODE_SEP) {
                     if let Some(index) = right_side.find(CODE_SEP) {
@@ -384,9 +382,9 @@ impl Derfile {
                             format!("Unable to execute code inside a code block: {}", content)
                         })?];
                     }
-                } else if right_side.contains(",") {
+                } else if right_side.contains(',') {
                     let split: Vec<String> = right_side
-                        .split(",")
+                        .split(',')
                         .map(|x| x.trim().to_string())
                         .collect();
                     value = split
@@ -457,22 +455,22 @@ impl Derfile {
                     continue;
                 }
 
-                if line.contains("=") {
-                    let split = line.split_at(line.find("=").unwrap());
+                if line.contains('=') {
+                    let split = line.split_at(line.find('=').unwrap());
                     match split.0.trim() {
                         "final_name" => {
                             if let Some(table) = derfile.get_template(&template_name) {
-                                let final_name = split.1.strip_prefix("=").unwrap().trim();
+                                let final_name = split.1.strip_prefix('=').unwrap().trim();
                                 table.set_final_name(final_name.to_string());
                                 derfile.empty_fields |= 0b00000001;
                             }
                         }
                         "hostnames" => {
                             if let Some(table) = derfile.get_template(&template_name) {
-                                if split.1.contains(",") {
+                                if split.1.contains(',') {
                                     let value_list: Vec<&str> = split.1.split(',').collect();
                                     for each in value_list {
-                                        if let Some(s) = each.strip_prefix("=") {
+                                        if let Some(s) = each.strip_prefix('=') {
                                             table.add_hostname(s.trim().to_string())
                                         } else {
                                             table.add_hostname(each.trim().to_string())
@@ -481,7 +479,7 @@ impl Derfile {
                                     derfile.empty_fields |= 0b00000010;
                                 } else {
                                     table.add_hostname(
-                                        split.1.strip_prefix("=").unwrap().trim().to_string(),
+                                        split.1.strip_prefix('=').unwrap().trim().to_string(),
                                     );
                                     derfile.empty_fields |= 0b00000010;
                                 }
@@ -489,14 +487,14 @@ impl Derfile {
                         }
                         "apply_path" => {
                             if let Some(table) = derfile.get_template(&template_name) {
-                                let apply_path = split.1.strip_prefix("=").unwrap().trim();
+                                let apply_path = split.1.strip_prefix('=').unwrap().trim();
                                 table.set_apply_path(apply_path.to_string());
                                 derfile.empty_fields |= 0b00000100;
                             }
                         }
                         "recursive" => {
                             if let Some(table) = derfile.get_template(&template_name) {
-                                let recursive_field = split.1.strip_prefix("=").unwrap().trim();
+                                let recursive_field = split.1.strip_prefix('=').unwrap().trim();
                                 if recursive_field == "true" {
                                     table.set_recursive(true)
                                 } else {
@@ -507,7 +505,7 @@ impl Derfile {
                         }
                         "parse_files" => {
                             if let Some(table) = derfile.get_template(&template_name) {
-                                let field = split.1.strip_prefix("=").unwrap().trim();
+                                let field = split.1.strip_prefix('=').unwrap().trim();
                                 if field == "true" {
                                     table.set_parse_files(true)
                                 } else {
@@ -518,9 +516,9 @@ impl Derfile {
                         }
                         "extensions" => {
                             if let Some(table) = derfile.get_template(&template_name) {
-                                let field = split.1.strip_prefix("=").unwrap().trim();
-                                if field.contains(",") {
-                                    for split_component in field.split(",") {
+                                let field = split.1.strip_prefix('=').unwrap().trim();
+                                if field.contains(',') {
+                                    for split_component in field.split(',') {
                                         // println!("{}", split_component.trim());
                                         table.add_extension(split_component.trim().to_string());
                                     }
@@ -607,7 +605,7 @@ extensions = t
 recursive = true
             "
         .to_string();
-        let derfile_result = Derfile::load_derfile(derfile_string, &Path::new("some_path"), &Config::default());
+        let derfile_result = Derfile::load_derfile(derfile_string, Path::new("some_path"), &Config::default());
 
         assert_eq!(derfile_result.is_ok(), true);
     }
@@ -624,7 +622,7 @@ hostnames = $host
 extensions = t, g, h
             "
         .to_string();
-        let derfile_result = Derfile::load_derfile(derfile_string, &Path::new("some_path"), &Config::default()).unwrap();
+        let derfile_result = Derfile::load_derfile(derfile_string, Path::new("some_path"), &Config::default()).unwrap();
         let template = derfile_result.templates.iter().filter(|t| t.0 != "[default-template]").last().unwrap().1;
         let variable = derfile_result.vars.iter().last().unwrap().1;
 

@@ -29,7 +29,7 @@ impl Config {
     pub fn load<P: AsRef<path::Path>>(path: &P) -> Result<Self> {
         let path = path.as_ref();
         if let Ok(read_file) = fs::read_to_string(path) {
-            return Config::parse(&read_file)
+            Config::parse(&read_file)
         } else {
             return Err(format!("Unable to read config file: {}", path.to_string_lossy()).into())
         }
@@ -41,12 +41,12 @@ impl Config {
 
         for line in lines {
             // line: "hello = something"
-            if line.contains("=") {
-                let split = line.split_at(line.find("=").unwrap());
+            if line.contains('=') {
+                let split = line.split_at(line.find('=').unwrap());
                 // "hello"
                 let left_part = split.0.trim();
                 // "something"
-                let right_part = split.1.trim().strip_prefix("=").unwrap().trim();
+                let right_part = split.1.trim().strip_prefix('=').unwrap().trim();
 
                 if left_part.contains(VAR_PREF) {
                     let mut env_keyword_string = CODE_KEYWORDS[0].clone().to_string();
@@ -58,10 +58,8 @@ impl Config {
                         let code = code.strip_suffix(CODE_SEP).unwrap();
                         if let Ok(code_result) = execute_code(code) {
                             config.vars.push(Variable::new(var_name.to_string(), vec![code_result]))
-                        } else {
-                            if debug() {
-                                println!("[ERROR] Unable to execute code: {}", code);
-                            }
+                        } else if debug() {
+                            println!("[ERROR] Unable to execute code: {}", code);
                         }
 
                     } else if right_part.starts_with(&env_keyword_string) && right_part.ends_with(CODE_SEP) {
@@ -69,19 +67,17 @@ impl Config {
                         let env = env.strip_suffix(CODE_SEP).unwrap();
                         if let Ok(var) = env::var(env) {
                             config.vars.push(Variable::new(var_name.to_string(), vec![var]))
-                        } else {
-                            if debug() {
-                                println!("[ERROR] Unable to read value of environmental variable: ${}", env);
-                            }
+                        } else if debug() {
+                            println!("[ERROR] Unable to read value of environmental variable: ${}", env);
                         }
                     } else {
                         config.vars.push(Variable::new(var_name.to_string(), vec![right_part.into()]))
                     }
                 } else {
-                    match &left_part[..] {
+                    match left_part {
                         "extensions" => {
-                            if right_part.contains(",") {
-                                for each in right_part.split(",") {
+                            if right_part.contains(',') {
+                                for each in right_part.split(',') {
                                     config.template.add_extension(each.to_string())
                                 }
                             } else {
@@ -90,8 +86,8 @@ impl Config {
 
                         }
                         "hostnames" => {
-                            if right_part.contains(",") {
-                                for each in right_part.split(",") {
+                            if right_part.contains(',') {
+                                for each in right_part.split(',') {
                                     config.template.add_hostname(each.to_string())
                                 }
                             } else {

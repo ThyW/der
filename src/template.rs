@@ -106,11 +106,11 @@ impl TemplateFile {
                 "[WARN] Template file: {:?} could not be read read. This error was returned",
                 read_error
             );
-            return Err(Error::Io(read_error));
+            Err(Error::Io(read_error))
         } else {
             let contents = result.unwrap();
             self.1 = Some(contents);
-            return Ok(());
+            Ok(())
         }
     }
 
@@ -126,13 +126,11 @@ impl TemplateFile {
         // Basic stuff.
         let mut ret = String::new();
         let hostname = execute_code("hostnamectl hostname".to_string())?;
-        if !self.0.hostnames.contains(&hostname) {
-            if debug() {
-                eprintln!(
-                    "[WARN] $HOSTNAME not in hostnames for template file: {}",
-                    self.0.path
-                )
-            }
+        if !self.0.hostnames.contains(&hostname) && debug() {
+            eprintln!(
+                "[WARN] $HOSTNAME not in hostnames for template file: {}",
+                self.0.path
+            )
         }
         if !path::Path::new(&self.0.path).exists() {
             return Err("Error parsing template file: File does not exist1"
@@ -194,14 +192,14 @@ impl TemplateFile {
             let parsed_first_line = code_block_first_line.clone();
             let mut parsed_first_line = parsed_first_line.as_str();
 
-            while parsed_first_line.starts_with(" ") {
+            while parsed_first_line.starts_with(' ') {
                 parsed_first_line = parsed_first_line.trim_start();
             }
 
             let possible_hostnames = parsed_first_line
                 .strip_prefix(TEMP_START)
                 .unwrap()
-                .split(",")
+                .split(',')
                 .into_iter()
                 .map(|x| x.trim())
                 .map(ToString::to_string)
@@ -235,8 +233,7 @@ impl TemplateFile {
                 let cloned_block = &file_lines_vec[*start..=*end];
                 let mut parsed_block = cloned_block
                     .iter()
-                    .filter(|x| x != &start_line && x != &end_line)
-                    .map(|x| x.clone())
+                    .filter(|x| x != &start_line && x != &end_line).cloned()
                     .collect::<Vec<String>>()
                     .to_vec();
                 let mut ready_block = parsed_block
@@ -273,7 +270,7 @@ impl TemplateFile {
     pub fn apply(&mut self) -> Result {
         let parsed = self.parse()?;
 
-        if self.0.apply_path.ends_with("/") {
+        if self.0.apply_path.ends_with('/') {
             self.0.apply_path.push_str(&self.0.final_name);
         } else {
             self.0.apply_path.push('/');
@@ -297,25 +294,25 @@ impl TemplateFile {
 impl From<derfile::Template> for TemplateStructure {
     fn from(other: derfile::Template) -> Self {
         if !path::Path::new(&other.name).is_dir() {
-            return Self::File(TemplateFile::new(other.into(), None));
+            Self::File(TemplateFile::new(other.into(), None))
         } else {
-            return Self::Directory(TemplateDirectory::new(other.into()));
+            Self::Directory(TemplateDirectory::new(other.into()))
         }
     }
 }
 
 impl From<derfile::Template> for TemplateSettings {
     fn from(other: derfile::Template) -> Self {
-        return Self {
+        Self {
             path: other.name.clone(),
             final_name: other.final_name.clone(),
             apply_path: other.apply_path.clone(),
             hostnames: other.hostnames.clone(),
             extensions: other.extensions.clone(),
             parse_files: other.parse_files,
-            recursive: other.recursive.clone(),
+            recursive: other.recursive,
             // keep_structure: other.keep_structure.clone(),
-        };
+        }
     }
 }
 
@@ -417,7 +414,7 @@ hostnames = $host
 
         let template_string = format!("some stuff\n@@ {}\nmore stuff\n@!\nand even more stuff\n", hostname);
 
-        let derfile = Derfile::load_derfile(derfile_string, &Path::new("some_path"), &Config::default())
+        let derfile = Derfile::load_derfile(derfile_string, Path::new("some_path"), &Config::default())
             .unwrap();
         let template = derfile.templates.iter().filter(|t| t.0 != "[default-template]").last().unwrap().1;
         let mut template_file = TemplateFile::new(template.clone().into(), Some(template_string));

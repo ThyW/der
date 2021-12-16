@@ -54,7 +54,7 @@ fn parse_args(args: Vec<String>) -> Args {
             "-h" | "--help" => ret.push(Arg::Help),
             "-f" | "--file" => {
                 if i + 1 != args.len() {
-                    if !args[i + 1].starts_with("-") {
+                    if !args[i + 1].starts_with('-') {
                         ret.push(Arg::Derfile(args[i + 1].clone()))
                     } else {
                         println!("[ERROR] Missing arguments for --file!");
@@ -69,7 +69,7 @@ fn parse_args(args: Vec<String>) -> Args {
             "-p" | "--print" => ret.push(Arg::Print),
             "-c" | "--config" => {
                 if i + 1 != args.len() {
-                    if !args[i + 1].starts_with("-") {
+                    if !args[i + 1].starts_with('-') {
                         ret.push(Arg::Config(args[i + 1].clone()))
                     } else {
                         println!("[ERROR] Missing arguments for --config!");
@@ -125,7 +125,7 @@ fn run(args: Args) -> Result {
             Arg::Apply => {
                 let derfile_default_path = path::Path::new("./derfile").canonicalize();
 
-                if !derfile_default_path.is_ok() && derfile.clone().is_none() {
+                if derfile_default_path.is_err() && derfile.clone().is_none() {
                     return Err("Error: No derfile path specified or present!"
                         .to_string()
                         .into());
@@ -136,7 +136,7 @@ fn run(args: Args) -> Result {
                     let loaded_derfile = fs::read_to_string(&derfile_default_path)?;
                     derfile = Some(derfile::Derfile::load_derfile(
                         loaded_derfile,
-                        &derfile_default_path,
+                        derfile_default_path,
                         &config
                     )?);
                 }
