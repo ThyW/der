@@ -30,7 +30,7 @@ $shell_code_var = `echo Hello`
 $env_var = env`VARNAME`
 
 # Appending to variables is also supported.
-# For that we use the : right after the variable name.
+# For that we use the ':' right after the variable name.
 # A few examples
 $path = /home/user/some/dir
 apply_path = $path:/next/dir/
@@ -49,7 +49,7 @@ hostnames = $hosts:,new_host, new_host_2
 
 # Template name is a path (absolute or relative) to the template file.
 [path/to/alacritty.yml.t] 
-# The final name is the name of the created parsed derfile.
+# The 'final_name' field is the name of the created parsed derfile.
 # This can be any string you want.
 final_name = alacritty.yml
 # A list of comma separated values, hostnames, for which this file should be parsed.
@@ -58,7 +58,6 @@ hostnames = machine-one, machine-two, machine-three
 # If the path does not exist, der will attepmt to create it!
 # WARNING: This has to be a directory.
 appy_path = /home/user/.config/alacritty/
-
 ```
 
 Templates can also point to directories, which can contain template files. These templates have a few more options, such as, if the files should even be attempted to be parsed, which file extensions to look for within the files and a couple of other options.
@@ -72,7 +71,7 @@ hostnames = $hosts
 extensions = t, tmp, template, tpl
 # This is a boolean field, so only 'true' and 'false' will be accepted as valid values.
 # If neither true nor false is found, the defaultt is assumed to be false!
-# This option specifies, if the files in the directory should be attempted to be parsed,
+# This option specifies, whether the files in the directory should be attempted to be parsed,
 # if 'false', all files will just be placed to the output directory without any change.
 parse_files = true
 # Visit only the first directory, ignoring all subdirectories.
@@ -105,7 +104,7 @@ your code goes, here,
 any number of lines
 or spaces, or anything
 @!
-# Substitution blocks end with a '@!'. These symbols must be on a new line.
+# Substitution blocks end with a '@!'. Both '@@' and '@!' must be on a new line.
 ```
 
 ### Example
