@@ -125,7 +125,7 @@ impl TemplateFile {
 
         // Basic stuff.
         let mut ret = String::new();
-        let hostname = execute_code("hostnamectl hostname".to_string())?;
+        let hostname = execute_code("hostnamectl hostname")?;
         if !self.0.hostnames.contains(&hostname) && debug() {
             eprintln!(
                 "[WARN] $HOSTNAME not in hostnames for template file: {}",

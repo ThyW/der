@@ -3,9 +3,9 @@ use std::env;
 use std::fmt;
 use std::path;
 
+use crate::config::*;
 use crate::error::*;
 use crate::utils::*;
-use crate::config::*;
 
 /// Symbols for derfile parsing, these can be changed before compilation.
 pub const TEMPLATE_LEFT: &str = "[";
@@ -88,11 +88,11 @@ impl Template {
         self.extensions.push(ext)
     }
 
-    pub(crate)fn serialize_hostnames(&self) -> String {
-        self.hostnames.join("," )
+    pub(crate) fn serialize_hostnames(&self) -> String {
+        self.hostnames.join(",")
     }
 
-    pub(crate)fn serialize_extensions(&self) -> String {
+    pub(crate) fn serialize_extensions(&self) -> String {
         self.extensions.join(",")
     }
 }
@@ -135,7 +135,7 @@ impl Derfile {
         }
 
         self.add_template("[default-template]".to_string());
-        if let Some(default_template) = self.get_template(&"[default-template]".to_string()) {
+        if let Some(default_template) = self.get_template(&"[default-template]") {
             *default_template = config.template.clone();
         }
     }
@@ -147,8 +147,8 @@ impl Derfile {
         // We create a clone of self for a simpler data manipulation.
         let mut self_clone = self.clone();
         let default_template: Template;
-        if let Some(dt) = self_clone.get_template(&"[default-template]".to_string()) {
-            default_template = dt.clone(); 
+        if let Some(dt) = self_clone.get_template(&"[default-template]") {
+            default_template = dt.clone();
         } else {
             default_template = Template::default();
         }
@@ -156,7 +156,7 @@ impl Derfile {
         for (template_name, template) in self.templates.iter() {
             // always skip config template
             if template_name == "[default-template]" {
-                continue
+                continue;
             }
             // For each template in our current derfile, we create a new temlate field in the new
             // derfile.
@@ -271,8 +271,8 @@ impl Derfile {
             } else {
                 for hostname_entry in template.hostnames.iter() {
                     if hostname_entry.starts_with(VAR_PREF) {
-                        if let Some(variable) = self_clone
-                            .get_var(&hostname_entry.strip_prefix(VAR_PREF).unwrap().to_string())
+                        if let Some(variable) =
+                            self_clone.get_var(&hostname_entry.strip_prefix(VAR_PREF).unwrap())
                         {
                             let mut variable_value = variable.value.clone();
                             hostname_clone.append(&mut variable_value);
@@ -291,16 +291,18 @@ impl Derfile {
                 for extension in template.extensions.iter() {
                     if extension.starts_with(VAR_PREF) {
                         if extension.contains(VAR_ADD) {
-                            let split_variable = extension.split_at(extension.find(VAR_ADD).unwrap());
-                            let variable_name = split_variable.0.strip_prefix(VAR_PREF).unwrap().trim();
+                            let split_variable =
+                                extension.split_at(extension.find(VAR_ADD).unwrap());
+                            let variable_name =
+                                split_variable.0.strip_prefix(VAR_PREF).unwrap().trim();
                             let additional_value = split_variable.1.strip_prefix(VAR_ADD).unwrap();
-                            if let Some(variable) = self_clone.get_var(&variable_name.to_string()) {
+                            if let Some(variable) = self_clone.get_var(&variable_name) {
                                 let mut variable_value = variable.value.clone();
                                 variable_value.push(additional_value.to_string());
                                 extensions_clone.append(&mut variable_value)
                             }
-                        } else if let Some(variable) = self_clone
-                            .get_var(&extension.strip_prefix(VAR_PREF).unwrap().to_string())
+                        } else if let Some(variable) =
+                            self_clone.get_var(&extension.strip_prefix(VAR_PREF).unwrap())
                         {
                             let mut variable_value = variable.value.clone();
                             extensions_clone.append(&mut variable_value)
@@ -328,7 +330,11 @@ impl Derfile {
         new_derfile.path = self.path.clone();
 
         if debug() {
-            println!("[INFO] Parsed derfile {}:\n{}", self.path.to_str().unwrap(), new_derfile)
+            println!(
+                "[INFO] Parsed derfile {}:\n{}",
+                self.path.to_str().unwrap(),
+                new_derfile
+            )
         };
 
         new_derfile
@@ -402,7 +408,10 @@ impl Derfile {
                         if let Some(index) = right_side.find(CODE_SEP) {
                             let env_variable = &right_side[index + 1..right_side.len() - 1];
                             if debug() {
-                                println!("[INFO] Environmental variable accessed: {}", env_variable);
+                                println!(
+                                    "[INFO] Environmental variable accessed: {}",
+                                    env_variable
+                                );
                             }
 
                             if let Ok(env_output) = env::var(env_variable) {
@@ -418,18 +427,15 @@ impl Derfile {
 
         let lines: Vec<String> = lines.clone().map(|x| x.to_string()).collect();
         for (ii, index) in template_indecies.iter().enumerate() {
-            let template_lines: Vec<String>;
-
-            // TODO: inefficient? shouldn't clone on each iteration,
-            // but maybe its okay since its dropped before the next iteration?
-            if template_indecies.len() == 1 || ii == template_indecies.len() - 1 {
-                template_lines = lines.clone().drain(index..).collect();
-            } else {
-                template_lines = lines
-                    .clone()
-                    .drain(index..&template_indecies[ii + 1])
-                    .collect();
-            }
+            let template_lines: Vec<String> =
+                if template_indecies.len() == 1 || ii == template_indecies.len() - 1 {
+                    lines.clone().drain(index..).collect()
+                } else {
+                    lines
+                        .clone()
+                        .drain(index..&template_indecies[ii + 1])
+                        .collect()
+                };
 
             let mut template_name: String =
                 template_lines[0][1..template_lines[0].len() - 1].to_string();
@@ -600,7 +606,8 @@ extensions = t
 recursive = true
             "
         .to_string();
-        let derfile_result = Derfile::load_derfile(derfile_string, Path::new("some_path"), &Config::default());
+        let derfile_result =
+            Derfile::load_derfile(derfile_string, Path::new("some_path"), &Config::default());
 
         assert_eq!(derfile_result.is_ok(), true);
     }
@@ -617,13 +624,26 @@ hostnames = $host
 extensions = t, g, h
             "
         .to_string();
-        let derfile_result = Derfile::load_derfile(derfile_string, Path::new("some_path"), &Config::default()).unwrap();
-        let template = derfile_result.templates.iter().filter(|t| t.0 != "[default-template]").last().unwrap().1;
+        let derfile_result =
+            Derfile::load_derfile(derfile_string, Path::new("some_path"), &Config::default())
+                .unwrap();
+        let template = derfile_result
+            .templates
+            .iter()
+            .filter(|t| t.0 != "[default-template]")
+            .last()
+            .unwrap()
+            .1;
         let variable = derfile_result.vars.iter().last().unwrap().1;
 
-        assert_eq!(template.serialize_hostnames(), "some,real,weird,hostnames".to_string());
+        assert_eq!(
+            template.serialize_hostnames(),
+            "some,real,weird,hostnames".to_string()
+        );
         assert_eq!(template.serialize_extensions(), "t,g,h".to_string());
-        assert_eq!(variable.serialize(), "some, real, weird, hostnames".to_string());
-        
+        assert_eq!(
+            variable.serialize(),
+            "some, real, weird, hostnames".to_string()
+        );
     }
 }
