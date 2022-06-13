@@ -10,10 +10,11 @@ mod error;
 mod template;
 mod utils;
 
+use config::*;
 use derfile::*;
 use error::*;
-use config::*;
 use template::*;
+use utils::debug;
 // use utils::execute_code;
 
 // Global variable for debugging
@@ -23,6 +24,7 @@ thread_local! {static DEBUG: RefCell<bool> = RefCell::new(false)}
 type Args = Vec<Arg>;
 
 /// All possible command line arguments.
+#[derive(Debug)]
 enum Arg {
     Help,
     Derfile(String),
@@ -35,20 +37,20 @@ enum Arg {
 fn help_function() {
     println!("der v0.1");
     println!("author: J. Kapko <kamo.bavmesa@gmail.com>");
-    println!("about: der is a tool for qucik multisystem application of dotfiles, with template supporting.\n");
-    println!("-c --config PATH                                           Use a specific config file.");
-    println!("-a --apply  PATH                                           Apply using  specified path to derfile.");
-    println!("-f --file   PATH                                           Use a specified derfile.");
-    println!("-h --help   PATH                                           Show this help message.");
-    println!("-p --print                                                 Print status messages and debug info.")
+    println!("about: der is a tool for quick multisystem application of dotfiles, with template and multi-version support.\n");
+    println!("-c --config PATH\t\t\tUse a specific config file.");
+    println!("-a --apply      \t\t\tAttempt to apply a derfile.");
+    println!("-f --file PATH  \t\t\tUse a specified derfile.");
+    println!("-h --help       \t\t\tShow this help message.");
+    println!("-p --print      \t\t\tPrint status messages and debug info.")
 }
 
 /// Get a list of passed in command line arguments.
 fn parse_args(args: Vec<String>) -> Args {
-    // return vector of Args
+    // return a vector of Args
     let mut ret = Vec::new();
 
-    // go through command line arguments and add them to return vector
+    // go through command line arguments and add them to the return vector
     for (i, entry) in args.iter().enumerate() {
         match &entry[..] {
             "-h" | "--help" => ret.push(Arg::Help),
@@ -105,7 +107,9 @@ fn run(args: Args) -> Result {
             Arg::Config(config_path) => {
                 if let Ok(conf) = Config::load(&config_path) {
                     config = conf;
-                    println!("{}", config)
+                    if debug() {
+                        println!("[\x1b[32mINFO\x1b[0m] Config file looks like: {}", config)
+                    }
                 } else {
                     config = Config::load_default()?;
                 }
@@ -117,7 +121,7 @@ fn run(args: Args) -> Result {
                 derfile = Some(derfile::Derfile::load_derfile(
                     open_derfile,
                     &path::Path::new(&file).canonicalize()?,
-                    &config
+                    &config,
                 )?);
             }
 
@@ -126,9 +130,7 @@ fn run(args: Args) -> Result {
                 let derfile_default_path = path::Path::new("./derfile").canonicalize();
 
                 if derfile_default_path.is_err() && derfile.clone().is_none() {
-                    return Err("Error: No derfile path specified or present!"
-                        .to_string()
-                        .into());
+                    return Err("No derfile path specified or present!".to_string().into());
                 }
 
                 if derfile.is_none() {
@@ -137,7 +139,7 @@ fn run(args: Args) -> Result {
                     derfile = Some(derfile::Derfile::load_derfile(
                         loaded_derfile,
                         derfile_default_path,
-                        &config
+                        &config,
                     )?);
                 }
 
@@ -151,13 +153,17 @@ fn run(args: Args) -> Result {
                 let vecs = recursive_build(template_structures)?;
                 for structure in vecs {
                     if let TemplateStructure::File(mut f) = structure {
+                        if debug() {
+                            println!("[\x1b[32mINFO\x1b[0m] Applying: {}", f.0.path)
+                        }
                         f.apply()?;
+                        if debug() {
+                            println!("[\x1b[32mINFO\x1b[0m] Done!");
+                        }
                     }
                 }
             }
-            Arg::Print => {
-                DEBUG.with(|v| *v.borrow_mut() = true);
-            }
+            Arg::Print => DEBUG.with(|v| *v.borrow_mut() = true),
             Arg::Help => {
                 help_function();
             }
@@ -173,11 +179,11 @@ fn main() -> Result {
 
     if let Err(e) = run(parsed_args) {
         println!("{}", e);
-        return Ok(())
+        return Ok(());
     }
 
     if DEBUG.with(|v| *v.borrow()) {
-        println!("Success!")
+        println!("\x1b[32mSuccess!\x1b[0m]")
     }
 
     Ok(())

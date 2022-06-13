@@ -25,7 +25,7 @@ pub type TemplateStructures = Vec<TemplateStructure>;
 
 /// Information needed for parsing a template file.
 #[derive(Debug, Clone)]
-pub struct TemplateFile(TemplateSettings, Option<String>);
+pub struct TemplateFile(pub TemplateSettings, pub Option<String>);
 
 /// Information need for parsing either a template file or a template directory.
 #[derive(Debug, Clone)]
@@ -44,8 +44,6 @@ pub struct TemplateSettings {
     pub extensions: Vec<String>,
     /// Should parse files recursively in all its subdirectories?
     pub recursive: bool,
-    /* /// Input directory structure will be same as output directory structure.
-    pub keep_structure: bool, */
 }
 
 /// A template strucutre is either a template file or a template directory, which can then hold
@@ -67,30 +65,6 @@ pub struct TemplateDirectory {
 #[derive(Debug, Clone)]
 pub struct ParsedTemplate(String);
 
-/* impl TemplateSettings {
-    pub fn new(
-        path: String,
-        final_name: String,
-        apply_path: String,
-        hostnames: Vec<String>,
-        extensions: Vec<String>,
-        parse_files: bool,
-        recursive: bool,
-        keep_structure: bool,
-        ) -> Self {
-            Self {
-                path,
-                final_name,
-                apply_path,
-                hostnames,
-                extensions,
-                parse_files,
-                recursive,
-                keep_structure
-            }
-    }
-} */
-
 impl TemplateFile {
     /// Create a new instance of a `TemplateFile`.
     pub fn new(ts: TemplateSettings, s: Option<String>) -> Self {
@@ -103,7 +77,7 @@ impl TemplateFile {
 
         if let Err(read_error) = result {
             eprintln!(
-                "[WARN] Template file: {:?} could not be read read. This error was returned",
+                "[WARN] Template file: {:?} could not be read. This error was returned",
                 read_error
             );
             Err(Error::Io(read_error))
@@ -128,7 +102,7 @@ impl TemplateFile {
         let hostname = execute_code("hostnamectl hostname")?;
         if !self.0.hostnames.contains(&hostname) && debug() {
             eprintln!(
-                "[WARN] $HOSTNAME not in hostnames for template file: {}",
+                "[\x1b[33mWARN\x1b[0m] $HOSTNAME not in hostnames for template file: {}",
                 self.0.path
             )
         }
@@ -171,7 +145,10 @@ impl TemplateFile {
 
         if open_code_blocks_count == 0 {
             if debug() {
-                eprintln!("[WARN] No code blocks were found in file {}", self.0.path);
+                eprintln!(
+                    "[\x1b[33mWARN\x1b[0m] No code blocks were found in file {}",
+                    self.0.path
+                );
             }
             return Ok(ParsedTemplate(file_lines));
         }
@@ -233,7 +210,8 @@ impl TemplateFile {
                 let cloned_block = &file_lines_vec[*start..=*end];
                 let mut parsed_block = cloned_block
                     .iter()
-                    .filter(|x| x != &start_line && x != &end_line).cloned()
+                    .filter(|x| x != &start_line && x != &end_line)
+                    .cloned()
                     .collect::<Vec<String>>()
                     .to_vec();
                 let mut ready_block = parsed_block
@@ -278,7 +256,7 @@ impl TemplateFile {
         }
         let output_path = path::Path::new(&self.0.apply_path);
         if debug() {
-            println!("[INFO] Outputting to: {:#?}", output_path);
+            println!("[\x1b[32mINFO\x1b[0m] Outputting to: {:#?}", output_path);
         }
         if output_path.exists() {
             fs::write(output_path, parsed.0).unwrap();
@@ -393,10 +371,10 @@ pub fn recursive_build(input: Vec<derfile::Template>) -> Result<TemplateStructur
 #[cfg(test)]
 mod test {
     use super::derfile::Derfile;
-    use super::TemplateFile;
     use super::execute_code;
-    use std::path::Path;
+    use super::TemplateFile;
     use crate::config::Config;
+    use std::path::Path;
 
     #[test]
     fn test_template_file() {
@@ -412,11 +390,21 @@ hostnames = $host
 "
         .to_string();
 
-        let template_string = format!("some stuff\n@@ {}\nmore stuff\n@!\nand even more stuff\n", hostname);
+        let template_string = format!(
+            "some stuff\n@@ {}\nmore stuff\n@!\nand even more stuff\n",
+            hostname
+        );
 
-        let derfile = Derfile::load_derfile(derfile_string, Path::new("some_path"), &Config::default())
-            .unwrap();
-        let template = derfile.templates.iter().filter(|t| t.0 != "[default-template]").last().unwrap().1;
+        let derfile =
+            Derfile::load_derfile(derfile_string, Path::new("some_path"), &Config::default())
+                .unwrap();
+        let template = derfile
+            .templates
+            .iter()
+            .filter(|t| t.0 != "[default-template]")
+            .last()
+            .unwrap()
+            .1;
         let mut template_file = TemplateFile::new(template.clone().into(), Some(template_string));
         assert_eq!(template_file.parse().is_ok(), true);
         let output = template_file.parse().unwrap().0;

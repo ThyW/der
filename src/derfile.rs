@@ -144,7 +144,7 @@ impl Derfile {
     fn parse(self) -> Self {
         // Create a new output derfile into which we will parse our current defile.
         let mut new_derfile: Derfile = Default::default();
-        // We create a clone of self for a simpler data manipulation.
+        // We create a clone of self for simpler data manipulation.
         let mut self_clone = self.clone();
         let default_template: Template;
         if let Some(dt) = self_clone.get_template(&"[default-template]") {
@@ -331,7 +331,7 @@ impl Derfile {
 
         if debug() {
             println!(
-                "[INFO] Parsed derfile {}:\n{}",
+                "[\x1b[32mINFO\x1b[0m] Parsed derfile {}:\n{}",
                 self.path.to_str().unwrap(),
                 new_derfile
             )
@@ -409,7 +409,7 @@ impl Derfile {
                             let env_variable = &right_side[index + 1..right_side.len() - 1];
                             if debug() {
                                 println!(
-                                    "[INFO] Environmental variable accessed: {}",
+                                    "[\x1b[32mINFO\x1b[0m] Environmental variable accessed: {}",
                                     env_variable
                                 );
                             }

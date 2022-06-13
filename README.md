@@ -74,8 +74,9 @@ extensions = t, tmp, template, tpl
 # This option specifies, whether the files in the directory should be attempted to be parsed,
 # if 'false', all files will just be placed to the output directory without any change.
 parse_files = true
-# Visit only the first directory, ignoring all subdirectories.
-# Again, a boolean value, either true of false
+# recursive indicates whether or not all directories should be visited and parsed.
+# If false, only the first directory will be visited and parsed, all the subdirectories will be ignored. 
+# Again, a boolean value, so valid values are either true, or false.
 recursive = true
 ```
 

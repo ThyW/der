@@ -6,12 +6,16 @@ use std::string;
 /// Custom wrapper for `Result`.
 pub type Result<T = ()> = std::result::Result<T, Error>;
 
-/// All the possible errors.
+/// All the possible error variants.
 #[derive(Debug)]
 pub enum Error {
+    /// Standard IO error.
     Io(io::Error),
+    /// Environmental variable error.
     EnvVar(env::VarError),
+    /// Conversion to UTF-8 string error.
     Utf8Conversion(string::FromUtf8Error),
+    /// Error with a custom message.
     Custom(String),
 }
 
@@ -31,11 +35,7 @@ impl fmt::Display for Error {
                 format!("Error occured: {}", e)
             }
         };
-        writeln!(
-            fmt,
-            "[ERROR] {}",
-            formatted_string
-        )
+        writeln!(fmt, "[\x1b[31mERROR\x1b[0m] {}", formatted_string)
     }
 }
 

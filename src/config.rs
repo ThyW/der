@@ -3,17 +3,17 @@ use std::fmt;
 use std::fs;
 use std::path;
 
-use crate::derfile::{VAR_PREF, CODE_SEP, CODE_KEYWORDS};
-use crate::derfile::{Template, Variable, };
+use crate::derfile::{Template, Variable};
+use crate::derfile::{CODE_KEYWORDS, CODE_SEP, VAR_PREF};
 use crate::error::*;
-use crate::utils::{execute_code, debug};
+use crate::utils::{debug, execute_code};
 
 type Variables = Vec<Variable>;
 
 #[derive(Clone, Debug, Default)]
 pub struct Config {
     pub(crate) template: Template,
-    pub(crate) vars: Variables
+    pub(crate) vars: Variables,
 }
 
 impl Config {
@@ -22,7 +22,7 @@ impl Config {
         if let Ok(read_file) = fs::read_to_string(path) {
             Config::parse(&read_file)
         } else {
-            return Err(format!("Unable to read config file: {}", path.to_string_lossy()).into())
+            return Err(format!("Unable to read config file: {}", path.to_string_lossy()).into());
         }
     }
 
@@ -48,21 +48,31 @@ impl Config {
                         let code = right_part.strip_prefix(CODE_SEP).unwrap();
                         let code = code.strip_suffix(CODE_SEP).unwrap();
                         if let Ok(code_result) = execute_code(code) {
-                            config.vars.push(Variable::new(var_name.to_string(), vec![code_result]))
+                            config
+                                .vars
+                                .push(Variable::new(var_name.to_string(), vec![code_result]))
                         } else if debug() {
-                            println!("[ERROR] Unable to execute code: {}", code);
+                            println!("[\x1b[31mERROR\x1b[0m] Unable to execute code: {}", code);
                         }
-
-                    } else if right_part.starts_with(&env_keyword_string) && right_part.ends_with(CODE_SEP) {
+                    } else if right_part.starts_with(&env_keyword_string)
+                        && right_part.ends_with(CODE_SEP)
+                    {
                         let env = right_part.strip_prefix(&env_keyword_string).unwrap();
                         let env = env.strip_suffix(CODE_SEP).unwrap();
                         if let Ok(var) = env::var(env) {
-                            config.vars.push(Variable::new(var_name.to_string(), vec![var]))
+                            config
+                                .vars
+                                .push(Variable::new(var_name.to_string(), vec![var]))
                         } else if debug() {
-                            println!("[ERROR] Unable to read value of environmental variable: ${}", env);
+                            println!(
+                                "[\x1b[31mERROR\x1b[0m] Unable to read value of environmental variable: ${}",
+                                env
+                            );
                         }
                     } else {
-                        config.vars.push(Variable::new(var_name.to_string(), vec![right_part.into()]))
+                        config
+                            .vars
+                            .push(Variable::new(var_name.to_string(), vec![right_part.into()]))
                     }
                 } else {
                     match left_part {
@@ -74,7 +84,6 @@ impl Config {
                             } else {
                                 config.template.add_extension(right_part.to_string())
                             }
-
                         }
                         "hostnames" => {
                             if right_part.contains(',') {
@@ -99,7 +108,7 @@ impl Config {
                                 config.template.set_parse_files(false)
                             }
                         }
-                        _ => ()
+                        _ => (),
                     }
                 }
             }
@@ -109,23 +118,28 @@ impl Config {
     }
 
     pub fn load_default() -> Result<Self> {
-        let default_path = path::PathBuf::from(format!("/home/{}/.config/der/config", execute_code("whoami")?));
+        let default_path = path::PathBuf::from(format!(
+            "/home/{}/.config/der/config",
+            execute_code("whoami")?
+        ));
         let config = Config::default();
 
         if default_path.exists() {
-            return Config::load(&default_path)
+            return Config::load(&default_path);
         } else {
             fs::create_dir_all(default_path.parent().unwrap())?;
             fs::write(&default_path, config.to_string())?;
             if debug() {
-                println!("[INFO] Wrote default config file to: {}", default_path.to_string_lossy())
+                println!(
+                    "[\x1b[32mINFO\x1b[0m] Wrote default config file to: {}",
+                    default_path.to_string_lossy()
+                )
             }
         }
 
         Ok(config)
     }
 }
-
 
 impl fmt::Display for Config {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

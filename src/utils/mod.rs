@@ -69,11 +69,7 @@ pub fn remove_template_ext_or_dir<S: AsRef<str>, P: AsRef<Path>>(
     let path = haystack.as_ref().to_path_buf();
     // HACK: fix this pls
     let final_component = path.components().last().unwrap();
-    let final_component_string = final_component
-        .as_os_str()
-        .to_str()
-        .unwrap()
-        .to_string();
+    let final_component_string = final_component.as_os_str().to_str().unwrap().to_string();
 
     if path.is_dir() {
         return final_component_string;
@@ -106,15 +102,23 @@ pub fn execute_code<S: AsRef<str>>(command: S) -> Result<String> {
         let output = Command::new(cmd).args(args).envs(&vars).output()?;
 
         let str = std::str::from_utf8(&output.stdout);
-        let str = str.unwrap_or_else(|_| panic!("ERROR: Unable to convert command output to string! [Error value: {}]",
-            &command));
+        let str = str.unwrap_or_else(|_| {
+            panic!(
+                "ERROR: Unable to convert command output to string! [Error value: {}]",
+                &command
+            )
+        });
         return Ok(str.trim().to_string());
     } else {
         let output = Command::new(&command).envs(&vars).output()?;
 
         let str = std::str::from_utf8(&output.stdout);
-        let str = str.unwrap_or_else(|_| panic!("ERROR: Unable to convert command output to string! [Error value: {}]",
-            &command));
+        let str = str.unwrap_or_else(|_| {
+            panic!(
+                "ERROR: Unable to convert command output to string! [Error value: {}]",
+                &command
+            )
+        });
         return Ok(str.trim().to_string());
     }
 }
@@ -144,6 +148,9 @@ mod tests {
 
     #[test]
     fn test_hostname() {
-        assert_eq!(super::execute_code("hostnamectl hostname").unwrap(), super::execute_code("cat /etc/hostname").unwrap())
+        assert_eq!(
+            super::execute_code("hostnamectl hostname").unwrap(),
+            super::execute_code("cat /etc/hostname").unwrap()
+        )
     }
 }
