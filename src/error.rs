@@ -1,3 +1,4 @@
+use hp::errors::HpError;
 use std::env;
 use std::fmt;
 use std::io;
@@ -17,6 +18,7 @@ pub enum Error {
     Utf8Conversion(string::FromUtf8Error),
     /// Error with a custom message.
     Custom(String),
+    HpError(HpError),
 }
 
 impl fmt::Display for Error {
@@ -33,6 +35,9 @@ impl fmt::Display for Error {
             }
             Self::Custom(e) => {
                 format!("Error occured: {}", e)
+            }
+            Self::HpError(e) => {
+                format!("{e}")
             }
         };
         writeln!(fmt, "[\x1b[31mERROR\x1b[0m] {}", formatted_string)
@@ -60,5 +65,11 @@ impl From<String> for Error {
 impl From<string::FromUtf8Error> for Error {
     fn from(other: string::FromUtf8Error) -> Self {
         Self::Utf8Conversion(other)
+    }
+}
+
+impl From<HpError> for Error {
+    fn from(e: HpError) -> Self {
+        Self::HpError(e)
     }
 }

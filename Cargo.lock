@@ -5,3 +5,11 @@ version = 3
 [[package]]
 name = "der"
 version = "0.1.0"
+dependencies = [
+ "hp",
+]
+
+[[package]]
+name = "hp"
+version = "0.1.0"
+source = "git+https://github.com/ThyW/hp#2161b710a914ed9dbf8992c4ba772b2047e4dbb8"
