@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::fs;
 use std::path;
+use std::process::exit;
 
 use hp::ParsedArguments;
 use hp::{Parser, Template as HpTemplate};
@@ -133,9 +134,9 @@ fn main() -> Result {
 
     let result = parser.parse(None);
 
-    if let Err(e) = result {
+    if let Err(e) = result.clone() {
         println!("{e}");
-        return Err(e.into());
+        exit(1);
     }
 
     if let Err(e) = run(result.unwrap()) {

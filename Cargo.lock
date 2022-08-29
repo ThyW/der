@@ -11,5 +11,5 @@ dependencies = [
 
 [[package]]
 name = "hp"
-version = "0.1.0"
-source = "git+https://github.com/ThyW/hp#2161b710a914ed9dbf8992c4ba772b2047e4dbb8"
+version = "1.0.0"
+source = "git+https://github.com/ThyW/hp#186d51fbbca973904017adc5d5823f501a2687fc"
