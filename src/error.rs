@@ -28,19 +28,19 @@ impl fmt::Display for Error {
                 format!("Inner IO Error: {:?}", e.kind())
             }
             Self::EnvVar(e) => {
-                format!("Environmental variable error: {:?}", e)
+                format!("Environmental variable error: {e:?}")
             }
             Self::Utf8Conversion(e) => {
-                format!("Error converting to UTF-8: {}", e)
+                format!("Error converting to UTF-8: {e}")
             }
             Self::Custom(e) => {
-                format!("Error occured: {}", e)
+                format!("Error occured: {e}")
             }
             Self::HpError(e) => {
                 format!("{e}")
             }
         };
-        writeln!(fmt, "[\x1b[31mERROR\x1b[0m] {}", formatted_string)
+        writeln!(fmt, "[\x1b[31mERROR\x1b[0m] {formatted_string}")
     }
 }
 

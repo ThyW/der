@@ -387,7 +387,7 @@ impl Derfile {
                     if let Some(index) = right_side.find(CODE_SEP) {
                         let content = right_side[index + 1..right_side.len() - 1].to_string();
                         value = vec![execute_code(content.clone()).map_err(|_| {
-                            format!("Unable to execute code inside a code block: {}", content)
+                            format!("Unable to execute code inside a code block: {content}")
                         })?];
                     }
                 } else if right_side.contains(',') {
@@ -409,8 +409,7 @@ impl Derfile {
                             let env_variable = &right_side[index + 1..right_side.len() - 1];
                             if debug() {
                                 println!(
-                                    "[\x1b[32mINFO\x1b[0m] Environmental variable accessed: {}",
-                                    env_variable
+                                    "[\x1b[32mINFO\x1b[0m] Environmental variable accessed: {env_variable}",
                                 );
                             }
 

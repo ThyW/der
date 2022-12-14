@@ -116,3 +116,8 @@ Why not? I've always wanted to use something with the same functionality as desc
 
 # Contributing
 Open an issue, or submit a PR if you feel like it.
+
+# TODO
+- [ ] **callbacks**: callbacks should be commands that get triggered on different events, or on different states of the execution. One use case could be to be to make some files from a directory executable after the directory is applied.
+- [ ] **better error handling**: speaks for itself, make sure all the possible errors are handled. 
+- [ ] **write man pages**: yes.

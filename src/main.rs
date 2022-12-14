@@ -37,7 +37,7 @@ fn run(args: ParsedArguments) -> Result {
         if let Ok(conf) = Config::load(&config_path) {
             config = conf;
             if debug() {
-                println!("[\x1b[32mINFO\x1b[0m] Config file looks like: {}", config)
+                println!("[\x1b[32mINFO\x1b[0m] Config file looks like: {config}")
             }
         } else {
             config = Config::load_default()?;
@@ -58,13 +58,13 @@ fn run(args: ParsedArguments) -> Result {
         // Apply template files according to derfile rules.
         let derfile_default_path = path::Path::new("./derfile").canonicalize();
 
-        if derfile_default_path.is_err() && derfile.clone().is_none() {
+        if derfile_default_path.is_err() && derfile.is_none() {
             return Err("No derfile path specified or present!".to_string().into());
         }
 
         if derfile.is_none() {
             let derfile_default_path = &derfile_default_path?;
-            let loaded_derfile = fs::read_to_string(&derfile_default_path)?;
+            let loaded_derfile = fs::read_to_string(derfile_default_path)?;
             derfile = Some(derfile::Derfile::load_derfile(
                 loaded_derfile,
                 derfile_default_path,
@@ -73,7 +73,6 @@ fn run(args: ParsedArguments) -> Result {
         }
 
         let template_structures: Vec<Template> = derfile
-            .clone()
             .unwrap()
             .templates
             .values()
@@ -140,7 +139,7 @@ fn main() -> Result {
     }
 
     if let Err(e) = run(result.unwrap()) {
-        println!("{}", e);
+        println!("{e}");
         return Ok(());
     }
 

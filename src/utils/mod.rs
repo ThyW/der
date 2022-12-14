@@ -7,7 +7,7 @@ use std::process::Command;
 use crate::error::*;
 use crate::DEBUG;
 
-/// Normalize a path without resovling symlinks and without need the path to exist! Found in
+/// Normalize a path without resovling symlinks and without the need for the path to exist! Found in
 /// `cargo` [source code](https://github.com/rust-lang/cargo/blob/fede83ccf973457de319ba6fa0e36ead454d2e20/src/cargo/util/paths.rs#L61)
 pub fn normalize_path<P: AsRef<Path> + ?Sized>(path: &P) -> PathBuf {
     let path_components = path.as_ref().components();
@@ -62,12 +62,13 @@ pub fn list_dir<P: AsRef<Path>>(path: &P) -> Result<Vec<fs::DirEntry>> {
     Ok(ret)
 }
 
+/// Attempt to remove any file extensions which matches the provied `haystack` of possible template
+/// file extensions.
 pub fn remove_template_ext_or_dir<S: AsRef<str>, P: AsRef<Path>>(
     haystack: &P,
     needles: &[S],
 ) -> String {
     let path = haystack.as_ref().to_path_buf();
-    // HACK: fix this pls
     let final_component = path.components().last().unwrap();
     let final_component_string = final_component.as_os_str().to_str().unwrap().to_string();
 
@@ -75,13 +76,16 @@ pub fn remove_template_ext_or_dir<S: AsRef<str>, P: AsRef<Path>>(
         return final_component_string;
     }
 
-    let ext = path.extension().unwrap().to_str().unwrap();
-
-    for each in needles {
-        if each.as_ref() == <&str>::clone(&ext) {
-            return final_component_string.replace(&format!(".{}", ext), "");
+    if let Some(extension) = path.extension() {
+        let ext = extension.to_str().unwrap();
+        for each in needles {
+            if each.as_ref() == <&str>::clone(&ext) {
+                return final_component_string.replace(&format!(".{ext}"), "");
+            }
         }
+        return final_component_string;
     }
+
     final_component_string
 }
 
@@ -90,7 +94,7 @@ pub fn debug() -> bool {
 }
 
 pub fn execute_code<S: AsRef<str>>(command: S) -> Result<String> {
-    // Get a list of all environmental args.
+    // Get a list of all environmental variables.
     let vars: HashMap<String, String> = env::vars().collect();
     // Split the command into its components.
     let command = command.as_ref();
@@ -110,7 +114,7 @@ pub fn execute_code<S: AsRef<str>>(command: S) -> Result<String> {
         });
         return Ok(str.trim().to_string());
     } else {
-        let output = Command::new(&command).envs(&vars).output()?;
+        let output = Command::new(command).envs(&vars).output()?;
 
         let str = std::str::from_utf8(&output.stdout);
         let str = str.unwrap_or_else(|_| {

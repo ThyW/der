@@ -77,8 +77,7 @@ impl TemplateFile {
 
         if let Err(read_error) = result {
             eprintln!(
-                "[WARN] Template file: {:?} could not be read. This error was returned",
-                read_error
+                "[WARN] Template file: {read_error:?} could not be read. This error was returned",
             );
             Err(Error::Io(read_error))
         } else {
@@ -256,7 +255,7 @@ impl TemplateFile {
         }
         let output_path = path::Path::new(&self.0.apply_path);
         if debug() {
-            println!("[\x1b[32mINFO\x1b[0m] Outputting to: {:#?}", output_path);
+            println!("[\x1b[32mINFO\x1b[0m] Outputting to: {output_path:#?}");
         }
         if output_path.exists() {
             fs::write(output_path, parsed.0).unwrap();

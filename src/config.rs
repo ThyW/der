@@ -52,7 +52,7 @@ impl Config {
                                 .vars
                                 .push(Variable::new(var_name.to_string(), vec![code_result]))
                         } else if debug() {
-                            println!("[\x1b[31mERROR\x1b[0m] Unable to execute code: {}", code);
+                            println!("[\x1b[31mERROR\x1b[0m] Unable to execute code: {code}");
                         }
                     } else if right_part.starts_with(&env_keyword_string)
                         && right_part.ends_with(CODE_SEP)
@@ -65,8 +65,7 @@ impl Config {
                                 .push(Variable::new(var_name.to_string(), vec![var]))
                         } else if debug() {
                             println!(
-                                "[\x1b[31mERROR\x1b[0m] Unable to read value of environmental variable: ${}",
-                                env
+                                "[\x1b[31mERROR\x1b[0m] Unable to read value of environmental variable: ${env}",
                             );
                         }
                     } else {
